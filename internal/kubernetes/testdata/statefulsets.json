@@ -1,0 +1,27 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSetList",
+  "metadata": {},
+  "items": [
+    {
+      "metadata": {
+        "name": "database",
+        "namespace": "fixture-system"
+      },
+      "spec": {
+        "replicas": 1
+      },
+      "status": {
+        "readyReplicas": 0,
+        "conditions": [
+          {
+            "type": "Ready",
+            "status": "False",
+            "reason": "SourceSpecificPrivateReason",
+            "message": "private database diagnostic"
+          }
+        ]
+      }
+    }
+  ]
+}

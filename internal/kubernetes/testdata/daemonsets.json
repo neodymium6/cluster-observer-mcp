@@ -1,0 +1,17 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "DaemonSetList",
+  "metadata": {},
+  "items": [
+    {
+      "metadata": {
+        "name": "agent",
+        "namespace": "fixture-system"
+      },
+      "status": {
+        "desiredNumberScheduled": 2,
+        "numberReady": 2
+      }
+    }
+  ]
+}

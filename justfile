@@ -1,5 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+export CGO_ENABLED := "0"
+
 # Show available recipes.
 default:
   @just --list

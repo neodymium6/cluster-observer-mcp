@@ -1,0 +1,57 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "DeploymentList",
+  "metadata": {},
+  "items": [
+    {
+      "metadata": {
+        "name": "api",
+        "namespace": "fixture-system",
+        "annotations": {
+          "example.invalid/private-note": "must not be returned"
+        }
+      },
+      "spec": {
+        "replicas": 3,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "api",
+                "env": [
+                  {
+                    "name": "FIXTURE_PRIVATE_VALUE",
+                    "value": "must-not-be-returned"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "readyReplicas": 1,
+        "conditions": [
+          {
+            "type": "Progressing",
+            "status": "False",
+            "reason": "ProgressDeadlineExceeded",
+            "message": "source rollout diagnostic"
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "web",
+        "namespace": "fixture-system"
+      },
+      "spec": {
+        "replicas": 2
+      },
+      "status": {
+        "readyReplicas": 2
+      }
+    }
+  ]
+}

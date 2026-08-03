@@ -66,6 +66,7 @@
               }
               ''
                 cd ${source}
+                export CGO_ENABLED=0
                 export GOCACHE="$TMPDIR/go-cache"
                 actionlint .github/workflows/ci.yml
                 go test ./...
