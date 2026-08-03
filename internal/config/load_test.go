@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net/http"
@@ -102,6 +103,30 @@ func TestReadCredentialRejectsWhitespaceAndOversize(t *testing.T) {
 				t.Fatal("readCredential() unexpectedly succeeded")
 			}
 		})
+	}
+}
+
+func TestFileCredentialSourceObservesRotation(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "projected-token")
+	writeTestFile(t, path, "clearly-fake-token-one\n")
+	source, err := fileCredentialSource(path)
+	if err != nil {
+		t.Fatalf("fileCredentialSource() error = %v", err)
+	}
+	first, err := source.BearerToken(context.Background())
+	if err != nil {
+		t.Fatalf("BearerToken(first) error = %v", err)
+	}
+
+	writeTestFile(t, path, "clearly-fake-token-two\n")
+	second, err := source.BearerToken(context.Background())
+	if err != nil {
+		t.Fatalf("BearerToken(second) error = %v", err)
+	}
+	if first != "clearly-fake-token-one" || second != "clearly-fake-token-two" {
+		t.Fatalf("BearerToken() values did not follow rotation")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -157,6 +158,73 @@ func TestSourceErrorsDoNotReturnBodyOrEndpoint(t *testing.T) {
 	if strings.Contains(err.Error(), "private response diagnostic") ||
 		strings.Contains(err.Error(), server.URL) {
 		t.Fatalf("source error disclosed private data: %v", err)
+	}
+}
+
+func TestSourceCredentialIsReadForEveryRequest(t *testing.T) {
+	t.Parallel()
+
+	var authorizations []string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorizations = append(authorizations, r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"metadata":{},"items":[]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	tokens := []string{"clearly-fake-token-one", "clearly-fake-token-two"}
+	nextToken := 0
+	client, err := NewClient(Config{
+		TargetID:   "cluster-a",
+		BaseURL:    server.URL,
+		Scopes:     fixtureScopes(),
+		HTTPClient: server.Client(),
+		Credential: CredentialSourceFunc(func(context.Context) (string, error) {
+			token := tokens[nextToken]
+			nextToken++
+			return token, nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	for range tokens {
+		if _, err := client.get(context.Background(), "/api/v1/nodes"); err != nil {
+			t.Fatalf("get() error = %v", err)
+		}
+	}
+	want := []string{"Bearer " + tokens[0], "Bearer " + tokens[1]}
+	if !slices.Equal(authorizations, want) {
+		t.Fatalf("Authorization headers = %q, want rotated fake values", authorizations)
+	}
+}
+
+func TestSourceCredentialErrorsAreRedacted(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("source request must not be sent without a valid credential")
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewClient(Config{
+		TargetID:   "cluster-a",
+		BaseURL:    server.URL,
+		Scopes:     fixtureScopes(),
+		HTTPClient: server.Client(),
+		Credential: CredentialSourceFunc(func(context.Context) (string, error) {
+			return "", errors.New("private credential path and diagnostic")
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.get(context.Background(), "/api/v1/nodes")
+	if !errors.Is(err, ErrCredentialUnavailable) {
+		t.Fatalf("get() error = %v, want ErrCredentialUnavailable", err)
+	}
+	if strings.Contains(err.Error(), "private credential") {
+		t.Fatalf("credential error disclosed private detail: %v", err)
 	}
 }
 

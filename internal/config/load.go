@@ -4,6 +4,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -90,7 +91,7 @@ func buildTarget(target Target) (*kubernetes.Client, error) {
 		return nil, errors.New("runtime configuration contains an unsupported target kind")
 	}
 
-	token, err := readCredential(target.BearerTokenFile)
+	credential, err := fileCredentialSource(target.BearerTokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +119,7 @@ func buildTarget(target Target) (*kubernetes.Client, error) {
 	client, err := kubernetes.NewClient(kubernetes.Config{
 		TargetID:       target.ID,
 		BaseURL:        target.Endpoint,
-		BearerToken:    token,
+		Credential:     credential,
 		Scopes:         scopes,
 		HTTPClient:     httpClient,
 		RequestTimeout: timeout,
@@ -127,6 +128,20 @@ func buildTarget(target Target) (*kubernetes.Client, error) {
 		return nil, errors.New("runtime target configuration is invalid")
 	}
 	return client, nil
+}
+
+func fileCredentialSource(path string) (kubernetes.CredentialSource, error) {
+	if path == "" {
+		return nil, nil
+	}
+	// Fail closed during startup, but discard the value so each request reads
+	// the projected token file again and observes atomic token rotation.
+	if _, err := readCredential(path); err != nil {
+		return nil, err
+	}
+	return kubernetes.CredentialSourceFunc(func(context.Context) (string, error) {
+		return readCredential(path)
+	}), nil
 }
 
 func readCredential(path string) (string, error) {

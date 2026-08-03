@@ -166,6 +166,8 @@ func safeToolError(err error) error {
 		return kubernetes.ErrSourceUnavailable
 	case errors.Is(err, kubernetes.ErrSourceRejected):
 		return kubernetes.ErrSourceRejected
+	case errors.Is(err, kubernetes.ErrCredentialUnavailable):
+		return kubernetes.ErrCredentialUnavailable
 	case errors.Is(err, kubernetes.ErrInvalidSourceResponse):
 		return kubernetes.ErrInvalidSourceResponse
 	case errors.Is(err, kubernetes.ErrUnknownScope):

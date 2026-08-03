@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
@@ -20,6 +21,7 @@ const (
 	defaultRequestTimeout  = 5 * time.Second
 	maxConcurrentRequests  = 4
 	maxSourceResponseBytes = 2 * 1024 * 1024
+	maxBearerTokenBytes    = 16 * 1024
 	resourceListLimit      = "500"
 )
 
@@ -35,11 +37,28 @@ var (
 	ErrSourceTimeout = errors.New("Kubernetes source request timed out")
 	// ErrSourceRejected indicates a non-success source response.
 	ErrSourceRejected = errors.New("Kubernetes source rejected the request")
+	// ErrCredentialUnavailable replaces credential source errors that could
+	// disclose a private file path or credential detail.
+	ErrCredentialUnavailable = errors.New("Kubernetes source credential is unavailable")
 	// ErrInvalidSourceResponse replaces parsing details and response content.
 	ErrInvalidSourceResponse = errors.New("Kubernetes source returned an invalid response")
 	// ErrUnknownScope indicates a scope outside the configured allowlist.
 	ErrUnknownScope = errors.New("Kubernetes scope is not configured")
 )
+
+// CredentialSource returns the current bearer token immediately before a
+// source request. Implementations must support projected token rotation.
+type CredentialSource interface {
+	BearerToken(context.Context) (string, error)
+}
+
+// CredentialSourceFunc adapts a function to CredentialSource.
+type CredentialSourceFunc func(context.Context) (string, error)
+
+// BearerToken returns the current bearer token.
+func (f CredentialSourceFunc) BearerToken(ctx context.Context) (string, error) {
+	return f(ctx)
+}
 
 // Scope maps a public opaque identifier to one allowed Kubernetes namespace.
 type Scope struct {
@@ -51,7 +70,7 @@ type Scope struct {
 type Config struct {
 	TargetID       string
 	BaseURL        string
-	BearerToken    string
+	Credential     CredentialSource
 	Scopes         []Scope
 	HTTPClient     *http.Client
 	RequestTimeout time.Duration
@@ -61,7 +80,7 @@ type Config struct {
 type Client struct {
 	targetID       string
 	baseURL        *url.URL
-	bearerToken    string
+	credential     CredentialSource
 	scopes         map[string]string
 	httpClient     *http.Client
 	requestTimeout time.Duration
@@ -119,7 +138,7 @@ func NewClient(config Config) (*Client, error) {
 	return &Client{
 		targetID:       config.TargetID,
 		baseURL:        baseURL,
-		bearerToken:    config.BearerToken,
+		credential:     config.Credential,
 		scopes:         scopes,
 		httpClient:     httpClient,
 		requestTimeout: requestTimeout,
@@ -195,8 +214,12 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, ErrSourceUnavailable
 	}
 	request.Header.Set("Accept", "application/json")
-	if c.bearerToken != "" {
-		request.Header.Set("Authorization", "Bearer "+c.bearerToken)
+	if c.credential != nil {
+		token, err := c.credential.BearerToken(requestContext)
+		if err != nil || !validBearerToken(token) {
+			return nil, ErrCredentialUnavailable
+		}
+		request.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	response, err := c.httpClient.Do(request)
@@ -221,4 +244,9 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+func validBearerToken(token string) bool {
+	return token != "" && len(token) <= maxBearerTokenBytes &&
+		!strings.ContainsAny(token, " \t\r\n")
 }
