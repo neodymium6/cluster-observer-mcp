@@ -53,14 +53,19 @@ records of the failed release attempts.
 
 ## Prerelease graduation
 
-`v0.1.0-alpha.4` is intended to be the final alpha release. It contains the
-bounded Kubernetes, monitoring, and Flux observation catalog needed for the
-first Hermes integration. Another alpha is justified only when integration
-finds a blocking defect that requires a tool, configuration, transport, audit,
-or security-boundary contract change.
+`v0.1.0-alpha.4` contained the bounded Kubernetes, monitoring, and Flux
+observation catalog needed for the first Hermes integration. Integration found
+one blocking compatibility defect: duplicate Prometheus `job` and `instance`
+pairs from unconfigured series caused the configured scrape-health observation
+to fail closed. The failure remained bounded and disclosed no source data.
+
+`v0.1.0-alpha.5` corrects that behavior and is intended to be the final alpha
+release. Another alpha is justified only when integration finds a blocking
+contract or implementation defect in a tool, configuration, transport, audit,
+or security boundary.
 
 The next release may be `v0.1.0-beta.1` after one private integration has
-demonstrated all of the following against a pinned alpha.4 image digest:
+demonstrated all of the following against a pinned alpha.5 image digest:
 
 - Hermes completes MCP discovery and calls every tool enabled by the private
   overlay;

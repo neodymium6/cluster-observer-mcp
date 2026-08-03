@@ -77,7 +77,10 @@ maps an exact Prometheus `job` and optional `instance` label pair to an opaque
 public scrape identity. The tool returns only that identity, a normalized
 `up`, `down`, or `missing` state, and the sample time. Raw series labels and
 label values are never returned. Missing configured identities are reported as
-`missing` so a failed service discovery path does not look healthy.
+`missing` so a failed service discovery path does not look healthy. Series that
+do not exactly match a configured identity are discarded before duplicate and
+sample-value validation. More than one source series matching a configured
+identity is ambiguous and fails closed as an invalid source response.
 
 ### Flux requests
 
