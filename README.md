@@ -5,9 +5,11 @@ small, explicitly designed infrastructure observations to AI assistants.
 
 ## Status
 
-Bootstrap only. The implementation language, MCP SDK, transport, and first
-observer adapters have not been selected. Do not deploy this repository or
-grant it infrastructure credentials yet.
+Initial implementation decisions are documented, but the server is not yet
+implemented. Do not deploy this repository or grant it infrastructure
+credentials yet. See
+[ADR 0001](docs/adr/0001-initial-implementation.md) for the accepted Go,
+official MCP Go SDK, stdio, and initial Kubernetes tool decisions.
 
 ## Intended boundary
 

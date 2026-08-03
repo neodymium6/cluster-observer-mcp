@@ -1,6 +1,6 @@
 # Design
 
-Status: bootstrap; implementation decisions pending.
+Status: initial implementation decisions accepted; implementation pending.
 
 ## Objective
 
@@ -57,18 +57,19 @@ organization, cluster, network, or account identity.
 
 ## Initial delivery stages
 
-1. Select the implementation language, MCP SDK, and transport.
-2. Define the first small set of tool schemas and their redaction contracts.
-3. Implement adapters against deterministic fake servers and fixtures.
+1. Record the Go, official MCP Go SDK, and stdio decisions.
+2. Define the first Kubernetes tool schemas and their redaction contracts.
+3. Implement the Kubernetes adapter against deterministic fake servers and
+   fixtures.
 4. Add runtime hardening, bounded concurrency, and structured audit events.
 5. Publish a container image and generic deployment example.
 6. Integrate a pinned release from a separate private infrastructure overlay.
 
 ## Open decisions
 
-- Implementation language and supported platforms.
-- MCP SDK and transport used for the first release.
-- The first infrastructure source and exact tool schemas.
 - Runtime authentication between the MCP client and server.
 - Metrics, health checks, and audit-event schema.
 - Release signing and software bill of materials generation.
+
+The accepted initial implementation decisions and tool boundaries are recorded
+in [ADR 0001](docs/adr/0001-initial-implementation.md).
