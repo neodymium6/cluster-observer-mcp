@@ -17,8 +17,19 @@ nix build .#oci-image
 ```
 
 The resulting `result` symlink points to a Docker archive that OCI tooling such
-as Skopeo can copy into a local daemon or registry. Publishing the archive is a
-separate release action and is not performed by repository checks.
+as Skopeo can copy into a local daemon or registry. Repository checks never
+publish it. The tag-gated release workflow publishes native Linux amd64 and
+arm64 images, per-platform SPDX SBOMs, and signed attestations according to
+[ADR 0003](adr/0003-release-policy.md).
+
+Released deployments must use the immutable manifest digest reported by the
+GitHub prerelease:
+
+```text
+ghcr.io/neodymium6/cluster-observer-mcp@sha256:<digest>
+```
+
+The repository does not publish `latest`.
 
 The entrypoint is `/bin/cluster-observer-mcp`. A private deployment overlay
 must provide the mode, private configuration path, and projected volumes. For

@@ -6,13 +6,15 @@ small, explicitly designed infrastructure observations to AI assistants.
 ## Status
 
 The initial read-only server, deterministic fake Kubernetes adapter, and
-loopback-only Streamable HTTP sidecar transport are implemented. The project
-has no supported release. Do not deploy it or grant it infrastructure
-credentials yet. See
+loopback-only Streamable HTTP sidecar transport are implemented. The first
+alpha release is intended for integration testing, not unattended production
+use. Do not deploy it or grant it infrastructure credentials without an
+explicit review of the private overlay. See
 [ADR 0001](docs/adr/0001-initial-implementation.md) for the initial
 implementation choices and
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted
-Hermes sidecar design.
+Hermes sidecar design and
+[ADR 0003](docs/adr/0003-release-policy.md) for the release policy.
 
 ## Intended boundary
 

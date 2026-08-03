@@ -1,0 +1,200 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3.21.9
+        with:
+          determinate: false
+
+      - name: Match tag to VERSION
+        shell: bash
+        run: |
+          expected="v$(tr -d '\n' < VERSION)"
+          test "$GITHUB_REF_NAME" = "$expected"
+
+      - name: Run repository checks
+        run: nix develop --command just ci
+
+  build:
+    name: Build and publish ${{ matrix.arch }}
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3.21.9
+        with:
+          determinate: false
+
+      - name: Build image and SBOM
+        shell: bash
+        run: |
+          archive=$(nix build .#oci-image --print-out-paths --no-link)
+          version=$(tr -d '\n' < VERSION)
+          sbom_archive="$RUNNER_TEMP/cluster-observer-mcp.tar"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          nix develop --command gzip -dc "$archive" > "$sbom_archive"
+          nix develop --command syft scan "docker-archive:$sbom_archive" \
+            --output "spdx-json=cluster-observer-mcp-$version-${{ matrix.arch }}.spdx.json"
+
+      - name: Log in to GHCR
+        shell: bash
+        run: |
+          echo "$GITHUB_TOKEN" | nix develop --command skopeo login \
+            --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish architecture image
+        shell: bash
+        run: |
+          ref="$IMAGE:$VERSION-${{ matrix.arch }}"
+          nix develop --command skopeo copy \
+            "docker-archive:$ARCHIVE" "docker://$ref"
+          digest=$(nix develop --command skopeo inspect \
+            --format '{{.Digest}}' "docker://$ref")
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Attest architecture SBOM
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          sbom-path: cluster-observer-mcp-${{ env.VERSION }}-${{ matrix.arch }}.spdx.json
+          push-to-registry: true
+
+      - name: Upload architecture SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ matrix.arch }}
+          path: cluster-observer-mcp-${{ env.VERSION }}-${{ matrix.arch }}.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish multi-platform release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3.21.9
+        with:
+          determinate: false
+
+      - name: Download SBOMs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: sbom-*
+          path: sboms
+          merge-multiple: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish and verify manifest list
+        shell: bash
+        run: |
+          version=$(tr -d '\n' < VERSION)
+          ref="$IMAGE:$version"
+          docker buildx imagetools create --tag "$ref" \
+            "$IMAGE:$version-amd64" \
+            "$IMAGE:$version-arm64"
+          digest=$(nix develop --command skopeo inspect \
+            --format '{{.Digest}}' "docker://$ref")
+          nix develop --command skopeo inspect --raw "docker://$ref" \
+            | nix develop --command jq -e '
+                [.manifests[].platform | .os + "/" + .architecture] | sort ==
+                ["linux/amd64", "linux/arm64"]
+              '
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+          printf '%s@%s\n' "$IMAGE" "$digest" > image-digest.txt
+
+      - name: Attest release image provenance
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          push-to-registry: true
+
+      - name: Create GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf "OCI image: \`%s@%s\`\n" "$IMAGE" "$DIGEST" > release-notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --prerelease \
+            --verify-tag \
+            image-digest.txt sboms/*.spdx.json
+
+      - name: Record immutable image reference
+        shell: bash
+        run: |
+          printf "### Published image\n\n\`%s@%s\`\n" \
+            "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

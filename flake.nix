@@ -13,6 +13,7 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = forAllSystems (system: import nixpkgs { inherit system; });
+      version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
       source = nixpkgs.lib.fileset.toSource {
         root = ./.;
         fileset = nixpkgs.lib.fileset.unions [
@@ -23,6 +24,7 @@
           ./LICENSE
           ./README.md
           ./SECURITY.md
+          ./VERSION
           ./cmd
           ./docs
           ./examples
@@ -38,7 +40,7 @@
         in
         pkgs.buildGoModule {
           pname = "cluster-observer-mcp";
-          version = "0.1.0-dev";
+          inherit version;
           src = source;
           vendorHash = "sha256-hbV/kOuImCWwmxcOdg9bEM8VLrCcn0m5bF4MMmj9lSs=";
           subPackages = [ "cmd/cluster-observer-mcp" ];
@@ -46,7 +48,7 @@
           ldflags = [
             "-s"
             "-w"
-            "-X main.version=0.1.0-dev"
+            "-X main.version=${version}"
           ];
           preCheck = "go vet ./...";
         };
@@ -79,7 +81,7 @@
         in
         pkgs.dockerTools.buildLayeredImage {
           name = "cluster-observer-mcp";
-          tag = "0.1.0-dev";
+          tag = version;
           created = "1970-01-01T00:00:01Z";
           contents = [ ];
           extraCommands = ''
@@ -101,7 +103,7 @@
                 "Read-only MCP server for bounded infrastructure observations";
               "org.opencontainers.image.source" = "https://github.com/neodymium6/cluster-observer-mcp";
               "org.opencontainers.image.licenses" = "Apache-2.0";
-              "org.opencontainers.image.version" = "0.1.0-dev";
+              "org.opencontainers.image.version" = version;
             };
           };
         };
@@ -144,7 +146,7 @@
             test -r "$rootfs/etc/ssl/certs/ca-bundle.crt"
             test ! -e "$rootfs/bin/sh"
             test ! -e "$rootfs/bin/bash"
-            test "$($rootfs/bin/cluster-observer-mcp --version)" = "0.1.0-dev"
+            test "$($rootfs/bin/cluster-observer-mcp --version)" = "${version}"
             touch "$out"
           '';
     in
@@ -156,17 +158,24 @@
         in
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              actionlint
-              git
-              gh
-              gitleaks
-              go
-              just
-              markdownlint-cli2
-              nixfmt-tree
-              pre-commit
-            ];
+            packages =
+              with pkgs;
+              [
+                actionlint
+                git
+                gh
+                gitleaks
+                go
+                jq
+                just
+                markdownlint-cli2
+                nixfmt-tree
+                pre-commit
+              ]
+              ++ lib.optionals stdenv.isLinux [
+                skopeo
+                syft
+              ];
           };
         }
       );
@@ -201,7 +210,7 @@
               }
               ''
                 cd ${source}
-                actionlint .github/workflows/ci.yml
+                actionlint .github/workflows/*.yml
                 markdownlint-cli2 AGENTS.md DESIGN.md README.md SECURITY.md docs/**/*.md
                 touch "$out"
               '';
