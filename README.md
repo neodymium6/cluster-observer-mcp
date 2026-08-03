@@ -56,6 +56,15 @@ Build the server:
 go build ./cmd/cluster-observer-mcp
 ```
 
+On Linux, build the minimal non-root container archive with:
+
+```bash
+nix build .#oci-image
+```
+
+See [the container image notes](docs/container-image.md) for its contents and
+runtime boundary. Repository checks build but never publish this archive.
+
 The server starts with no targets when `--config` is omitted. A private runtime
 configuration can be selected explicitly:
 

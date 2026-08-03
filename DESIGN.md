@@ -68,8 +68,9 @@ organization, cluster, network, or account identity.
 The initial stdio server, fake Kubernetes adapter, loopback-only Streamable
 HTTP transport, health checks, rotation-aware credentials, and structured
 audit events defined by
-[ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) are complete. OCI
-image construction is the next delivery stage.
+[ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) are complete. The
+minimal non-root OCI image is also available; a generic deployment example and
+release process are the next delivery stages.
 
 ## Open decisions
 
