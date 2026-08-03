@@ -1,6 +1,6 @@
 # Design
 
-Status: initial implementation decisions accepted; implementation pending.
+Status: initial observer and sidecar transport implementation in progress.
 
 ## Objective
 
@@ -65,9 +65,9 @@ organization, cluster, network, or account identity.
 5. Publish a container image and generic deployment example.
 6. Integrate a pinned release from a separate private infrastructure overlay.
 
-The initial stdio server and fake Kubernetes adapter are complete. The next
-delivery stage adds the loopback-only Streamable HTTP transport, health checks,
-rotation-aware credentials, and structured audit events defined by
+The initial stdio server, fake Kubernetes adapter, loopback-only Streamable
+HTTP transport, health checks, and rotation-aware credentials are complete.
+Structured audit events are the remaining runtime-hardening stage defined by
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md).
 
 ## Open decisions

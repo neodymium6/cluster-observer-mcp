@@ -5,9 +5,10 @@ small, explicitly designed infrastructure observations to AI assistants.
 
 ## Status
 
-The initial read-only stdio server and deterministic fake Kubernetes adapter
-are implemented. The project has no supported release. Do not deploy it or
-grant it infrastructure credentials yet. See
+The initial read-only server, deterministic fake Kubernetes adapter, and
+loopback-only Streamable HTTP sidecar transport are implemented. The project
+has no supported release. Do not deploy it or grant it infrastructure
+credentials yet. See
 [ADR 0001](docs/adr/0001-initial-implementation.md) for the initial
 implementation choices and
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted
@@ -49,7 +50,7 @@ Run the repository checks:
 just check
 ```
 
-Build the stdio server:
+Build the server:
 
 ```bash
 go build ./cmd/cluster-observer-mcp
@@ -62,10 +63,35 @@ configuration can be selected explicitly:
 cluster-observer-mcp --config /path/to/private-config.json
 ```
 
+For the same-Pod Hermes sidecar mode, start the stateless Streamable HTTP
+transport explicitly:
+
+```bash
+cluster-observer-mcp serve-http \
+  --config /path/to/private-config.json \
+  --port 8080
+```
+
+The listener is always `127.0.0.1`; no flag can select a wildcard, Pod IP, or
+hostname. Hermes should use `http://127.0.0.1:8080/mcp` and an explicit
+include-list containing only the three tools below. The endpoint uses same-Pod
+loopback without TLS or application authentication and must not be published
+through a Service or ingress.
+
+Kubernetes exec probes use fixed commands that cannot accept a URL or path:
+
+```bash
+cluster-observer-mcp probe-startup --port 8080
+cluster-observer-mcp probe-liveness --port 8080
+cluster-observer-mcp probe-readiness --port 8080
+```
+
 See [the reserved example](examples/config.example.json) for the configuration
 schema. Real endpoints, namespaces, credential files, and CA bundles belong in
 the operator's private infrastructure repository. Source credentials are read
-from a separate bounded file and are never accepted in MCP tool input.
+from a separate bounded file immediately before each source request so
+projected token rotation does not require a restart. They are never accepted
+in MCP tool input.
 
 The initial tools are:
 
@@ -76,10 +102,8 @@ The initial tools are:
 All tools return structured, bounded observations. They do not expose raw
 Kubernetes objects, caller-controlled API paths, selectors, or URLs.
 
-The next implementation stage will add a stateless Streamable HTTP endpoint
-bound only to `127.0.0.1` for a same-Pod Hermes sidecar integration. It is not
-implemented yet; stdio remains the only available transport in the current
-binary.
+Both stdio and Streamable HTTP expose the same transport-independent,
+purpose-built tool catalog.
 
 The Go module is published as
 `github.com/neodymium6/cluster-observer-mcp`.
