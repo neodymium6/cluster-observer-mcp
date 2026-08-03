@@ -82,7 +82,11 @@ jobs:
       - name: Log in to GHCR
         shell: bash
         run: |
-          echo "$GITHUB_TOKEN" | nix develop --command skopeo login \
+          registries_conf="$RUNNER_TEMP/registries.conf"
+          printf 'unqualified-search-registries = []\n' > "$registries_conf"
+          echo "REGISTRIES_CONF=$registries_conf" >> "$GITHUB_ENV"
+          echo "$GITHUB_TOKEN" | nix develop --command skopeo \
+            --registries-conf "$registries_conf" login \
             --username "$GITHUB_ACTOR" --password-stdin ghcr.io
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -91,9 +95,11 @@ jobs:
         shell: bash
         run: |
           ref="$IMAGE:$VERSION-${{ matrix.arch }}"
-          nix develop --command skopeo copy \
+          nix develop --command skopeo \
+            --registries-conf "$REGISTRIES_CONF" copy \
             "docker-archive:$ARCHIVE" "docker://$ref"
-          digest=$(nix develop --command skopeo inspect \
+          digest=$(nix develop --command skopeo \
+            --registries-conf "$REGISTRIES_CONF" inspect \
             --format '{{.Digest}}' "docker://$ref")
           echo "DIGEST=$digest" >> "$GITHUB_ENV"
 
@@ -152,12 +158,16 @@ jobs:
         run: |
           version=$(tr -d '\n' < VERSION)
           ref="$IMAGE:$version"
+          registries_conf="$RUNNER_TEMP/registries.conf"
+          printf 'unqualified-search-registries = []\n' > "$registries_conf"
           docker buildx imagetools create --tag "$ref" \
             "$IMAGE:$version-amd64" \
             "$IMAGE:$version-arm64"
-          digest=$(nix develop --command skopeo inspect \
+          digest=$(nix develop --command skopeo \
+            --registries-conf "$registries_conf" inspect \
             --format '{{.Digest}}' "docker://$ref")
-          nix develop --command skopeo inspect --raw "docker://$ref" \
+          nix develop --command skopeo \
+            --registries-conf "$registries_conf" inspect --raw "docker://$ref" \
             | nix develop --command jq -e '
                 [.manifests[].platform | .os + "/" + .architecture] | sort ==
                 ["linux/amd64", "linux/arm64"]
