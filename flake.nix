@@ -26,6 +26,7 @@
               actionlint
               git
               gitleaks
+              go
               just
               markdownlint-cli2
               nixfmt-tree
@@ -48,6 +49,8 @@
               ./DESIGN.md
               ./README.md
               ./SECURITY.md
+              ./go.mod
+              ./internal
             ];
           };
         in
@@ -57,12 +60,16 @@
               {
                 nativeBuildInputs = [
                   pkgs.actionlint
+                  pkgs.go
                   pkgs.markdownlint-cli2
                 ];
               }
               ''
                 cd ${source}
+                export GOCACHE="$TMPDIR/go-cache"
                 actionlint .github/workflows/ci.yml
+                go test ./...
+                go vet ./...
                 markdownlint-cli2 AGENTS.md DESIGN.md README.md SECURITY.md
                 touch "$out"
               '';

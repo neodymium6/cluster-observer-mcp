@@ -11,11 +11,15 @@ init:
 
 # Format repository-owned files.
 fmt:
+  gofmt -w internal
   nix fmt -- flake.nix
 
 # Run all checks available for the current bootstrap stage.
 check:
   pre-commit run --all-files
+  test -z "$(gofmt -l internal)"
+  go test ./...
+  go vet ./...
   nix flake check .
   nix flake check --no-build --all-systems .
 

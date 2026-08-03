@@ -60,3 +60,9 @@ repos:
         language: system
         pass_filenames: false
         files: ^flake\.nix$
+
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt -w
+        language: system
+        types: [go]
