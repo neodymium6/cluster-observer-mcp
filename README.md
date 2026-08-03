@@ -7,9 +7,11 @@ small, explicitly designed infrastructure observations to AI assistants.
 
 The read-only server, deterministic fake Kubernetes, monitoring, and Flux
 adapters, and loopback-only Streamable HTTP sidecar transport are implemented.
-Alpha releases are intended for integration testing, not unattended production
-use. Do not deploy the server or grant it infrastructure credentials without
-an explicit review of the private overlay. See
+The beta prerelease marks the initial tool catalog and public contracts as
+complete after private integration validation. It remains a pre-1.0 release,
+not a general production-support commitment. Deployments must pin an immutable
+image digest and explicitly review the private overlay, credentials, RBAC, and
+network policy. See
 [ADR 0001](docs/adr/0001-initial-implementation.md) for the initial
 implementation choices and
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted

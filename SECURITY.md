@@ -2,10 +2,14 @@
 
 ## Supported versions
 
-Alpha releases are experimental and have no production support commitment. Do
-not use them with production or sensitive infrastructure without reviewing the
-exact image revision, private configuration, credential projection, RBAC, and
-network policy.
+The latest beta prerelease receives best-effort security fixes while the project
+remains pre-1.0. Older prereleases, including all alpha releases, are not
+supported. Beta indicates that the initial public contracts completed private
+integration validation; it is not a general production-support commitment.
+
+Deployments must pin an immutable image digest and review the exact revision,
+private configuration, credential projection, RBAC, and network policy before
+using the server with production or sensitive infrastructure.
 
 ## Security boundary
 

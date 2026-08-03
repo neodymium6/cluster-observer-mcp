@@ -59,13 +59,9 @@ one blocking compatibility defect: duplicate Prometheus `job` and `instance`
 pairs from unconfigured series caused the configured scrape-health observation
 to fail closed. The failure remained bounded and disclosed no source data.
 
-`v0.1.0-alpha.5` corrects that behavior and is intended to be the final alpha
-release. Another alpha is justified only when integration finds a blocking
-contract or implementation defect in a tool, configuration, transport, audit,
-or security boundary.
-
-The next release may be `v0.1.0-beta.1` after one private integration has
-demonstrated all of the following against a pinned alpha.5 image digest:
+`v0.1.0-alpha.5` corrected that behavior and is the final alpha release. The
+private integration subsequently demonstrated all of the following against its
+pinned alpha.5 image digest:
 
 - Hermes completes MCP discovery and calls every tool enabled by the private
   overlay;
@@ -76,6 +72,16 @@ demonstrated all of the following against a pinned alpha.5 image digest:
   exposing raw source details; and
 - no critical confidentiality, authorization, data-bounding, or stability
   defect remains open.
+
+The validation covered all six public tools, source rejection, timeout and
+unavailable behavior, projected credential rotation without an observer
+restart, and full Pod recreation. It also confirmed that the MCP client held no
+Kubernetes credential, could not reach the monitoring API directly, and
+received no internal source details in responses or audit events. The
+repository checks passed against the same public alpha.5 source revision.
+
+These results satisfy the beta gate. `v0.1.0-beta.1` records the graduation
+without changing the tool, transport, configuration, or audit contracts.
 
 Beta means the initial feature set and public contracts are complete. New
 observation families wait until after `v0.1.0`; beta changes are limited to
