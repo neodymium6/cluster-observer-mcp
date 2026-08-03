@@ -44,10 +44,12 @@ write permissions are limited to GitHub Releases, GHCR, and attestations. Action
 dependencies are pinned by full commit SHA. The repository's normal CI remains
 read-only.
 
-The first published prerelease is `v0.1.0-alpha.2`. Alpha releases are suitable
+The first complete prerelease is `v0.1.0-alpha.3`. Alpha releases are suitable
 for integration testing of the bounded observer interface, not for an
 unattended production rollout. The earlier `v0.1.0-alpha.1` tag published no
-artifacts and remains immutable as a record of the failed release attempt.
+artifacts. The `v0.1.0-alpha.2` attempt published only architecture staging
+images, not a release manifest or GitHub Release. Both tags remain immutable as
+records of the failed release attempts.
 
 ## Publication procedure
 

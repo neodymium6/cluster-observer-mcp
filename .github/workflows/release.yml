@@ -79,17 +79,19 @@ jobs:
           nix develop --command syft scan "docker-archive:$sbom_archive" \
             --output "spdx-json=cluster-observer-mcp-$version-${{ matrix.arch }}.spdx.json"
 
-      - name: Log in to GHCR
+      - name: Configure Skopeo
         shell: bash
         run: |
           registries_conf="$RUNNER_TEMP/registries.conf"
           printf 'unqualified-search-registries = []\n' > "$registries_conf"
           echo "REGISTRIES_CONF=$registries_conf" >> "$GITHUB_ENV"
-          echo "$GITHUB_TOKEN" | nix develop --command skopeo \
-            --registries-conf "$registries_conf" login \
-            --username "$GITHUB_ACTOR" --password-stdin ghcr.io
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish architecture image
         shell: bash
