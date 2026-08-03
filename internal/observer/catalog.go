@@ -38,7 +38,8 @@ func validateTarget(target Target) error {
 	if err := ValidateIdentifier("target", target.ID); err != nil {
 		return err
 	}
-	if target.Kind != TargetKindKubernetes {
+	if target.Kind != TargetKindKubernetes && target.Kind != TargetKindMonitoring &&
+		target.Kind != TargetKindFlux {
 		return &ValidationError{Field: "kind", Reason: "is not supported"}
 	}
 	if len(target.Capabilities) == 0 {
@@ -47,9 +48,7 @@ func validateTarget(target Target) error {
 
 	seen := make(map[Capability]struct{}, len(target.Capabilities))
 	for _, capability := range target.Capabilities {
-		switch capability {
-		case CapabilityKubernetesClusterHealth, CapabilityKubernetesUnhealthyWorkloads:
-		default:
+		if !capabilityMatchesKind(target.Kind, capability) {
 			return &ValidationError{Field: "capabilities", Reason: "contains an unsupported value"}
 		}
 		if _, exists := seen[capability]; exists {
@@ -59,6 +58,21 @@ func validateTarget(target Target) error {
 	}
 
 	return nil
+}
+
+func capabilityMatchesKind(kind TargetKind, capability Capability) bool {
+	switch kind {
+	case TargetKindKubernetes:
+		return capability == CapabilityKubernetesClusterHealth ||
+			capability == CapabilityKubernetesUnhealthyWorkloads
+	case TargetKindMonitoring:
+		return capability == CapabilityMonitoringActiveAlerts ||
+			capability == CapabilityMonitoringScrapeHealth
+	case TargetKindFlux:
+		return capability == CapabilityFluxUnhealthyReconciliations
+	default:
+		return false
+	}
 }
 
 // List returns a sorted copy of the public target inventory.

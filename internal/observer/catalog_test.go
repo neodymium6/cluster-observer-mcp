@@ -10,6 +10,11 @@ func TestCatalog(t *testing.T) {
 
 	targets := []Target{
 		{
+			ID:           "monitoring-a",
+			Kind:         TargetKindMonitoring,
+			Capabilities: []Capability{CapabilityMonitoringActiveAlerts},
+		},
+		{
 			ID:           "cluster-b",
 			Kind:         TargetKindKubernetes,
 			Capabilities: []Capability{CapabilityKubernetesUnhealthyWorkloads},
@@ -30,8 +35,8 @@ func TestCatalog(t *testing.T) {
 	}
 
 	got := catalog.List()
-	wantIDs := []string{"cluster-a", "cluster-b"}
-	gotIDs := []string{got.Targets[0].ID, got.Targets[1].ID}
+	wantIDs := []string{"cluster-a", "cluster-b", "monitoring-a"}
+	gotIDs := []string{got.Targets[0].ID, got.Targets[1].ID, got.Targets[2].ID}
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
 		t.Fatalf("List() IDs = %v, want %v", gotIDs, wantIDs)
 	}
@@ -80,6 +85,14 @@ func TestCatalogRejectsInvalidTargets(t *testing.T) {
 			targets: []Target{{
 				ID:           "cluster-a",
 				Kind:         "generic",
+				Capabilities: []Capability{CapabilityKubernetesClusterHealth},
+			}},
+		},
+		{
+			name: "capability does not match kind",
+			targets: []Target{{
+				ID:           "monitoring-a",
+				Kind:         TargetKindMonitoring,
 				Capabilities: []Capability{CapabilityKubernetesClusterHealth},
 			}},
 		},

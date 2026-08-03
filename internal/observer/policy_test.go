@@ -71,6 +71,51 @@ func TestNormalizeWorkloadReason(t *testing.T) {
 	}
 }
 
+func TestNormalizeNewObservationInputs(t *testing.T) {
+	t.Parallel()
+
+	alerts, err := (ListActiveAlertsInput{Target: "monitoring-a"}).Normalize()
+	if err != nil || alerts.Limit != DefaultListLimit {
+		t.Fatalf("ListActiveAlertsInput.Normalize() = %#v, %v", alerts, err)
+	}
+	flux, err := (ListUnhealthyReconciliationsInput{
+		Target: "flux-a",
+		Scope:  "system",
+	}).Normalize()
+	if err != nil || flux.Limit != DefaultListLimit {
+		t.Fatalf("ListUnhealthyReconciliationsInput.Normalize() = %#v, %v", flux, err)
+	}
+	if err := (GetScrapeHealthInput{Target: "monitoring-a"}).Validate(); err != nil {
+		t.Fatalf("GetScrapeHealthInput.Validate() error = %v", err)
+	}
+	if _, err := (ListActiveAlertsInput{Target: "monitoring-a", Limit: 51}).Normalize(); err == nil {
+		t.Fatal("ListActiveAlertsInput.Normalize() accepted an excessive limit")
+	}
+	if _, err := (ListUnhealthyReconciliationsInput{
+		Target: "flux-a",
+		Scope:  "https://example.invalid",
+	}).Normalize(); err == nil {
+		t.Fatal("ListUnhealthyReconciliationsInput.Normalize() accepted a URL scope")
+	}
+}
+
+func TestNewReasonNormalizationIsBounded(t *testing.T) {
+	t.Parallel()
+
+	if got := NormalizeAlertSeverity("WARN"); got != AlertSeverityWarning {
+		t.Fatalf("NormalizeAlertSeverity() = %q", got)
+	}
+	if got := NormalizeAlertSeverity("private severity text"); got != AlertSeverityUnknown {
+		t.Fatalf("unknown severity was not redacted: %q", got)
+	}
+	if got := NormalizeReconciliationReason("HealthCheckFailed"); got != ReconciliationReasonHealthCheckFailed {
+		t.Fatalf("NormalizeReconciliationReason() = %q", got)
+	}
+	if got := NormalizeReconciliationReason("private condition text"); got != ReconciliationReasonUnknown {
+		t.Fatalf("unknown reconciliation reason was not redacted: %q", got)
+	}
+}
+
 func TestCheckResultSize(t *testing.T) {
 	t.Parallel()
 
