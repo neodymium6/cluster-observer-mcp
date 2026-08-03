@@ -8,9 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"example.com/cluster-observer-mcp/internal/config"
-	"example.com/cluster-observer-mcp/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/neodymium6/cluster-observer-mcp/internal/config"
+	"github.com/neodymium6/cluster-observer-mcp/internal/mcpserver"
 )
 
 var version = "dev"

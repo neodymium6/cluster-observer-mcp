@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 
-	"example.com/cluster-observer-mcp/internal/kubernetes"
-	"example.com/cluster-observer-mcp/internal/observer"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/neodymium6/cluster-observer-mcp/internal/kubernetes"
+	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
 )
 
 const (

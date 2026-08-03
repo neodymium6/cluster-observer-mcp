@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/cluster-observer-mcp/internal/observer"
+	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
 )
 
 func TestLoad(t *testing.T) {

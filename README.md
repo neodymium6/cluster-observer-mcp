@@ -73,9 +73,8 @@ The initial tools are:
 All tools return structured, bounded observations. They do not expose raw
 Kubernetes objects, caller-controlled API paths, selectors, or URLs.
 
-Until a public hosting location is selected, `go.mod` intentionally uses the
-reserved `example.com/cluster-observer-mcp` module path. Release preparation
-must replace it with the final public module path.
+The Go module is published as
+`github.com/neodymium6/cluster-observer-mcp`.
 
 Direnv users can approve the included `.envrc` with `direnv allow`.
 

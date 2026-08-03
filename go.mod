@@ -1,4 +1,4 @@
-module example.com/cluster-observer-mcp
+module github.com/neodymium6/cluster-observer-mcp
 
 go 1.26.0
 

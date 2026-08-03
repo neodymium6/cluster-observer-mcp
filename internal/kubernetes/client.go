@@ -13,7 +13,7 @@ import (
 	"slices"
 	"time"
 
-	"example.com/cluster-observer-mcp/internal/observer"
+	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
 )
 
 const (
