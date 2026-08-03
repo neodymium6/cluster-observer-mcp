@@ -51,6 +51,39 @@ artifacts. The `v0.1.0-alpha.2` attempt published only architecture staging
 images, not a release manifest or GitHub Release. Both tags remain immutable as
 records of the failed release attempts.
 
+## Prerelease graduation
+
+`v0.1.0-alpha.4` is intended to be the final alpha release. It contains the
+bounded Kubernetes, monitoring, and Flux observation catalog needed for the
+first Hermes integration. Another alpha is justified only when integration
+finds a blocking defect that requires a tool, configuration, transport, audit,
+or security-boundary contract change.
+
+The next release may be `v0.1.0-beta.1` after one private integration has
+demonstrated all of the following against a pinned alpha.4 image digest:
+
+- Hermes completes MCP discovery and calls every tool enabled by the private
+  overlay;
+- the observer's exact RBAC permissions are validated, Hermes receives no
+  Kubernetes credential, and Hermes has no direct monitoring API path;
+- projected credential rotation, observer and Pod restart, source timeout,
+  source rejection, and unavailable-source behavior are exercised without
+  exposing raw source details; and
+- no critical confidentiality, authorization, data-bounding, or stability
+  defect remains open.
+
+Beta means the initial feature set and public contracts are complete. New
+observation families wait until after `v0.1.0`; beta changes are limited to
+integration fixes, documentation, compatibility fixes, and security hardening.
+
+The project may publish `v0.1.0` after the beta contracts operate unchanged for
+at least 14 consecutive days in the private integration, restart and credential
+rotation have been repeated successfully, release provenance and SBOMs remain
+verifiable, and no unresolved high-severity defect remains. A contract change
+resets that observation period and receives another beta release. These
+criteria are release gates, not permission to deploy this repository into an
+environment; every private deployment still requires its own explicit review.
+
 ## Publication procedure
 
 1. Update `VERSION` and release-facing documentation in a reviewed commit.
