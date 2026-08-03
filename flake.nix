@@ -62,6 +62,7 @@
             packages = with pkgs; [
               actionlint
               git
+              gh
               gitleaks
               go
               just
