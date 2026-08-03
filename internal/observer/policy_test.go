@@ -83,3 +83,28 @@ func TestCheckResultSize(t *testing.T) {
 		t.Fatalf("CheckResultSize() error = %v, want ErrResultTooLarge", err)
 	}
 }
+
+func FuzzNormalizeWorkloadReason(f *testing.F) {
+	for _, reason := range []string{
+		"NotReady",
+		"ReplicaFailure",
+		"ProgressDeadlineExceeded",
+		"Unschedulable",
+		"source-only-text",
+	} {
+		f.Add(reason)
+	}
+
+	allowed := map[WorkloadReason]bool{
+		WorkloadReasonNotReady:         true,
+		WorkloadReasonReplicaFailure:   true,
+		WorkloadReasonProgressDeadline: true,
+		WorkloadReasonUnschedulable:    true,
+		WorkloadReasonUnknown:          true,
+	}
+	f.Fuzz(func(t *testing.T, reason string) {
+		if got := NormalizeWorkloadReason(reason); !allowed[got] {
+			t.Fatalf("NormalizeWorkloadReason() returned non-allowlisted value %q", got)
+		}
+	})
+}

@@ -193,6 +193,52 @@ func TestSourceResponseLimitsAndTimeout(t *testing.T) {
 	})
 }
 
+func TestSourceConcurrencyIsBounded(t *testing.T) {
+	t.Parallel()
+
+	entered := make(chan struct{}, maxConcurrentRequests+1)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(releaseAll)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		entered <- struct{}{}
+		<-release
+		_, _ = w.Write([]byte(`{"metadata":{},"items":[]}`))
+	}))
+	t.Cleanup(server.Close)
+	client := newFixtureClient(t, server)
+	client.requestTimeout = 2 * time.Second
+
+	errors := make(chan error, maxConcurrentRequests+1)
+	for range maxConcurrentRequests + 1 {
+		go func() {
+			_, err := client.get(context.Background(), "/api/v1/nodes")
+			errors <- err
+		}()
+	}
+
+	for range maxConcurrentRequests {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for bounded requests")
+		}
+	}
+	select {
+	case <-entered:
+		t.Fatal("more than four source requests ran concurrently")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	releaseAll()
+	for range maxConcurrentRequests + 1 {
+		if err := <-errors; err != nil {
+			t.Fatalf("source request error = %v", err)
+		}
+	}
+}
+
 func TestNewClientRejectsUnsafeConfiguration(t *testing.T) {
 	t.Parallel()
 

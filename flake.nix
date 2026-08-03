@@ -13,6 +13,43 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = forAllSystems (system: import nixpkgs { inherit system; });
+      source = nixpkgs.lib.fileset.toSource {
+        root = ./.;
+        fileset = nixpkgs.lib.fileset.unions [
+          ./.github
+          ./.markdownlint.yaml
+          ./AGENTS.md
+          ./DESIGN.md
+          ./LICENSE
+          ./README.md
+          ./SECURITY.md
+          ./cmd
+          ./docs
+          ./examples
+          ./go.mod
+          ./go.sum
+          ./internal
+        ];
+      };
+      goPackageFor =
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        pkgs.buildGoModule {
+          pname = "cluster-observer-mcp";
+          version = "0.1.0-dev";
+          src = source;
+          vendorHash = "sha256-hbV/kOuImCWwmxcOdg9bEM8VLrCcn0m5bF4MMmj9lSs=";
+          subPackages = [ "cmd/cluster-observer-mcp" ];
+          env.CGO_ENABLED = "0";
+          ldflags = [
+            "-s"
+            "-w"
+            "-X main.version=0.1.0-dev"
+          ];
+          preCheck = "go vet ./...";
+        };
     in
     {
       devShells = forAllSystems (
@@ -36,42 +73,29 @@
         }
       );
 
+      packages = forAllSystems (system: {
+        default = goPackageFor system;
+      });
+
       checks = forAllSystems (
         system:
         let
           pkgs = pkgsFor.${system};
-          source = pkgs.lib.fileset.toSource {
-            root = ./.;
-            fileset = pkgs.lib.fileset.unions [
-              ./.github
-              ./.markdownlint.yaml
-              ./AGENTS.md
-              ./DESIGN.md
-              ./README.md
-              ./SECURITY.md
-              ./go.mod
-              ./internal
-            ];
-          };
         in
         {
+          go-build = goPackageFor system;
           repository-metadata =
             pkgs.runCommand "cluster-observer-mcp-repository-metadata"
               {
                 nativeBuildInputs = [
                   pkgs.actionlint
-                  pkgs.go
                   pkgs.markdownlint-cli2
                 ];
               }
               ''
                 cd ${source}
-                export CGO_ENABLED=0
-                export GOCACHE="$TMPDIR/go-cache"
                 actionlint .github/workflows/ci.yml
-                go test ./...
-                go vet ./...
-                markdownlint-cli2 AGENTS.md DESIGN.md README.md SECURITY.md
+                markdownlint-cli2 AGENTS.md DESIGN.md README.md SECURITY.md docs/**/*.md
                 touch "$out"
               '';
         }

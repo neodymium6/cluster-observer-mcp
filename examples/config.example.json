@@ -1,0 +1,18 @@
+{
+  "targets": [
+    {
+      "id": "cluster-a",
+      "kind": "kubernetes",
+      "endpoint": "https://kubernetes.example.invalid",
+      "bearerTokenFile": "/run/secrets/cluster-observer/source-token",
+      "caBundleFile": "/run/secrets/cluster-observer/source-ca.pem",
+      "requestTimeout": "5s",
+      "scopes": [
+        {
+          "id": "system",
+          "namespace": "fixture-system"
+        }
+      ]
+    }
+  ]
+}

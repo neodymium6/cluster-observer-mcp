@@ -5,11 +5,10 @@ small, explicitly designed infrastructure observations to AI assistants.
 
 ## Status
 
-Initial implementation decisions are documented, but the server is not yet
-implemented. Do not deploy this repository or grant it infrastructure
-credentials yet. See
-[ADR 0001](docs/adr/0001-initial-implementation.md) for the accepted Go,
-official MCP Go SDK, stdio, and initial Kubernetes tool decisions.
+The initial read-only stdio server and deterministic fake Kubernetes adapter
+are implemented. The project has no supported release. Do not deploy it or
+grant it infrastructure credentials yet. See
+[ADR 0001](docs/adr/0001-initial-implementation.md) for the accepted design.
 
 ## Intended boundary
 
@@ -46,6 +45,37 @@ Run the repository checks:
 ```bash
 just check
 ```
+
+Build the stdio server:
+
+```bash
+go build ./cmd/cluster-observer-mcp
+```
+
+The server starts with no targets when `--config` is omitted. A private runtime
+configuration can be selected explicitly:
+
+```bash
+cluster-observer-mcp --config /path/to/private-config.json
+```
+
+See [the reserved example](examples/config.example.json) for the configuration
+schema. Real endpoints, namespaces, credential files, and CA bundles belong in
+the operator's private infrastructure repository. Source credentials are read
+from a separate bounded file and are never accepted in MCP tool input.
+
+The initial tools are:
+
+- `observer_list_targets`;
+- `kubernetes_get_cluster_health`; and
+- `kubernetes_list_unhealthy_workloads`.
+
+All tools return structured, bounded observations. They do not expose raw
+Kubernetes objects, caller-controlled API paths, selectors, or URLs.
+
+Until a public hosting location is selected, `go.mod` intentionally uses the
+reserved `example.com/cluster-observer-mcp` module path. Release preparation
+must replace it with the final public module path.
 
 Direnv users can approve the included `.envrc` with `direnv allow`.
 

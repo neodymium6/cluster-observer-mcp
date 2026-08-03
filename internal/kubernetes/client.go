@@ -18,6 +18,7 @@ import (
 
 const (
 	defaultRequestTimeout  = 5 * time.Second
+	maxConcurrentRequests  = 4
 	maxSourceResponseBytes = 2 * 1024 * 1024
 	resourceListLimit      = "500"
 )
@@ -64,6 +65,7 @@ type Client struct {
 	scopes         map[string]string
 	httpClient     *http.Client
 	requestTimeout time.Duration
+	requestSlots   chan struct{}
 	now            func() time.Time
 }
 
@@ -121,6 +123,7 @@ func NewClient(config Config) (*Client, error) {
 		scopes:         scopes,
 		httpClient:     httpClient,
 		requestTimeout: requestTimeout,
+		requestSlots:   make(chan struct{}, maxConcurrentRequests),
 		now:            time.Now,
 	}, nil
 }
@@ -163,14 +166,24 @@ func (c *Client) selectedScopes(scopeID string) ([]Scope, error) {
 }
 
 func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
+	requestContext, cancel := context.WithTimeout(ctx, c.requestTimeout)
+	defer cancel()
+
+	select {
+	case c.requestSlots <- struct{}{}:
+		defer func() { <-c.requestSlots }()
+	case <-requestContext.Done():
+		if errors.Is(requestContext.Err(), context.DeadlineExceeded) {
+			return nil, ErrSourceTimeout
+		}
+		return nil, ErrSourceUnavailable
+	}
+
 	requestURL := *c.baseURL
 	requestURL.Path = path
 	query := requestURL.Query()
 	query.Set("limit", resourceListLimit)
 	requestURL.RawQuery = query.Encode()
-
-	requestContext, cancel := context.WithTimeout(ctx, c.requestTimeout)
-	defer cancel()
 
 	request, err := http.NewRequestWithContext(
 		requestContext,
