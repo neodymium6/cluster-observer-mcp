@@ -126,9 +126,17 @@ func (c *Client) GetScrapeHealth(
 		return observer.GetScrapeHealthOutput{}, sourcehttp.ErrInvalidSourceResponse
 	}
 
-	samples := make(map[string]observer.ScrapeHealth, len(response.Data.Result))
+	configuredSeries := make(map[string]struct{}, len(c.scrapes))
+	for _, configured := range c.scrapes {
+		configuredSeries[seriesKey(configured.Job, configured.Instance)] = struct{}{}
+	}
+
+	samples := make(map[string]observer.ScrapeHealth, len(c.scrapes))
 	for _, sample := range response.Data.Result {
 		key := seriesKey(sample.Metric.Job, sample.Metric.Instance)
+		if _, configured := configuredSeries[key]; !configured {
+			continue
+		}
 		if _, exists := samples[key]; exists {
 			return observer.GetScrapeHealthOutput{}, sourcehttp.ErrInvalidSourceResponse
 		}

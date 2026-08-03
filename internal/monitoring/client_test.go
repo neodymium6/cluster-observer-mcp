@@ -143,6 +143,7 @@ func TestInvalidPrometheusSamplesFailClosed(t *testing.T) {
 		`{"status":"success","data":{"resultType":"matrix","result":[]}}`,
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"fixture-api","instance":"fixture-a:9090"},"value":[1,"NaN"]}]}}`,
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"fixture-api","instance":"fixture-a:9090"},"value":[1,"2"]}]}}`,
+		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"fixture-api","instance":"fixture-a:9090","variant":"one"},"value":[1,"1"]},{"metric":{"job":"fixture-api","instance":"fixture-a:9090","variant":"two"},"value":[2,"1"]}]}}`,
 	}
 	for _, fixture := range tests {
 		fixture := fixture
@@ -161,6 +162,63 @@ func TestInvalidPrometheusSamplesFailClosed(t *testing.T) {
 				t.Fatalf("GetScrapeHealth() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestUnconfiguredDuplicatePrometheusSamplesAreIgnored(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+  "status": "success",
+  "data": {
+    "resultType": "vector",
+    "result": [
+      {
+        "metric": {"job": "fixture-api", "instance": "fixture-a:9090"},
+        "value": [1785758400, "1"]
+      },
+      {
+        "metric": {
+          "job": "fixture-kubelet",
+          "instance": "fixture-node:10250",
+          "metrics_path": "/metrics"
+        },
+        "value": [1785758401, "1"]
+      },
+      {
+        "metric": {
+          "job": "fixture-kubelet",
+          "instance": "fixture-node:10250",
+          "metrics_path": "/metrics/cadvisor"
+        },
+        "value": [1785758402, "1"]
+      },
+      {
+        "metric": {
+          "job": "fixture-kubelet",
+          "instance": "fixture-node:10250",
+          "metrics_path": "/metrics/probes"
+        },
+        "value": [1785758403, "NaN"]
+      }
+    ]
+  }
+}`))
+	}))
+	t.Cleanup(server.Close)
+
+	client := newFixtureClient(t, server)
+	result, err := client.GetScrapeHealth(context.Background(), observer.GetScrapeHealthInput{
+		Target: "monitoring-a",
+	})
+	if err != nil {
+		t.Fatalf("GetScrapeHealth() error = %v", err)
+	}
+	if len(result.Scrapes) != 3 || result.Scrapes[0].ID != "api" ||
+		result.Scrapes[0].State != observer.ScrapeStateUp {
+		t.Fatalf("GetScrapeHealth() = %#v", result)
 	}
 }
 
