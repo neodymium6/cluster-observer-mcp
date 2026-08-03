@@ -74,7 +74,6 @@ release process are the next delivery stages.
 
 ## Open decisions
 
-- Metrics and their exposure boundary.
 - Release signing and software bill of materials generation.
 
 The accepted initial implementation decisions and tool boundaries are recorded
@@ -82,3 +81,7 @@ in [ADR 0001](docs/adr/0001-initial-implementation.md).
 
 The accepted Hermes sidecar transport and credential-isolation design is
 recorded in [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md).
+
+The accepted fixed monitoring, Service proxy, and Flux observation boundaries
+are recorded in
+[ADR 0004](docs/adr/0004-bounded-monitoring-and-flux-observations.md).

@@ -14,7 +14,9 @@ explicit review of the private overlay. See
 implementation choices and
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted
 Hermes sidecar design and
-[ADR 0003](docs/adr/0003-release-policy.md) for the release policy.
+[ADR 0003](docs/adr/0003-release-policy.md) for the release policy. The next
+bounded monitoring and Flux observations are specified in
+[ADR 0004](docs/adr/0004-bounded-monitoring-and-flux-observations.md).
 
 ## Intended boundary
 
