@@ -119,17 +119,23 @@ func runProbe(ctx context.Context, arguments []string, kind httptransport.ProbeK
 }
 
 func loadServer(configPath string) (*mcp.Server, error) {
-	var sources []mcpserver.KubernetesSource
+	sourceSet := mcpserver.SourceSet{}
 	if configPath != "" {
-		clients, err := config.Load(configPath)
+		sources, err := config.Load(configPath)
 		if err != nil {
 			return nil, err
 		}
-		for _, client := range clients {
-			sources = append(sources, client)
+		for _, client := range sources.Kubernetes {
+			sourceSet.Kubernetes = append(sourceSet.Kubernetes, client)
+		}
+		for _, client := range sources.Monitoring {
+			sourceSet.Monitoring = append(sourceSet.Monitoring, client)
+		}
+		for _, client := range sources.Flux {
+			sourceSet.Flux = append(sourceSet.Flux, client)
 		}
 	}
-	server, err := mcpserver.NewWithOptions(version, sources, mcpserver.Options{
+	server, err := mcpserver.NewWithSourceSet(version, sourceSet, mcpserver.Options{
 		AuditWriter: os.Stderr,
 	})
 	if err != nil {

@@ -85,6 +85,14 @@ func TestGetRejectsUnsafeResponsesAndConfiguration(t *testing.T) {
 			want: ErrSourceRejected,
 		},
 		{
+			name: "redirect",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Location", "/private-destination")
+				w.WriteHeader(http.StatusFound)
+			},
+			want: ErrSourceRejected,
+		},
+		{
 			name: "oversized",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")

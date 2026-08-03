@@ -75,13 +75,16 @@ func (c *Client) ListActiveAlerts(
 	}
 	for _, sourceAlert := range sourceAlerts {
 		name := sourceAlert.Labels.Name
+		component := ""
 		if !alertNamePattern.MatchString(name) {
 			name = "unknown"
+		} else {
+			component = c.components[name]
 		}
 		alert := observer.ActiveAlert{
 			Name:      name,
 			Severity:  observer.NormalizeAlertSeverity(sourceAlert.Labels.Severity),
-			Component: c.components[name],
+			Component: component,
 		}
 		if startedAt, err := time.Parse(time.RFC3339Nano, sourceAlert.StartsAt); err == nil {
 			startedAt = startedAt.UTC()

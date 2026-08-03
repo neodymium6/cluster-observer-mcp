@@ -15,7 +15,7 @@ Every event contains:
 
 - `timestamp`: completion time in UTC;
 - `schemaVersion`: currently `1`;
-- `tool`: one of the three allowlisted tool names, or `unknown` for an
+- `tool`: one of the six allowlisted tool names, or `unknown` for an
   unsupported tool name;
 - `durationMs`: non-negative elapsed milliseconds; and
 - `outcome`: one bounded category listed below.
@@ -25,8 +25,11 @@ apply. They are omitted for input-validation failures and unsupported tool
 names. Result metadata is tool-specific:
 
 - `observer_list_targets` includes `itemCount`;
-- `kubernetes_get_cluster_health` includes `partial`; and
-- `kubernetes_list_unhealthy_workloads` includes `itemCount` and `truncated`.
+- `kubernetes_get_cluster_health` includes `partial`;
+- `kubernetes_list_unhealthy_workloads` includes `itemCount` and `truncated`;
+- `monitoring_list_active_alerts` includes `itemCount` and `truncated`;
+- `monitoring_get_scrape_health` includes `itemCount` and `partial`; and
+- `flux_list_unhealthy_reconciliations` includes `itemCount` and `truncated`.
 
 Version 1 outcomes are:
 
@@ -45,6 +48,7 @@ Version 1 outcomes are:
 - `internal_error`.
 
 Events never contain credentials, credential paths, endpoints, Kubernetes
-namespaces, unrestricted arguments, request or response bodies, Kubernetes
-object fields, raw tool names, or raw error text. The `unknown` value prevents
-an unsupported caller-controlled tool name from becoming log content.
+namespaces, unrestricted arguments, request or response bodies, source object
+fields, Prometheus labels, Alertmanager annotations, raw tool names, or raw
+error text. The `unknown` value prevents an unsupported caller-controlled tool
+name from becoming log content.

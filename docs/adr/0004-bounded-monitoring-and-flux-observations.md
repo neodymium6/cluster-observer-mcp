@@ -21,7 +21,7 @@ subresource.
 
 ## Decision
 
-The next public tool catalog will add three purpose-built observations:
+The public tool catalog adds three purpose-built observations:
 
 - `monitoring_list_active_alerts` returns a bounded list of currently active,
   non-silenced, non-inhibited alerts;
@@ -191,7 +191,7 @@ remains the primary authorization boundary exposed to Hermes.
 
 ## References
 
-- [Kubernetes Service API proxy](https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/)
+- [Kubernetes Service API proxy](https://kubernetes.io/docs/reference/kubernetes-api/core/service-v1/)
 - [Kubernetes RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
 - [Kubernetes NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 - [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/)

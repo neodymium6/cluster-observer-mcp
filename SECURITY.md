@@ -2,8 +2,10 @@
 
 ## Supported versions
 
-The project is in its bootstrap phase and has no supported release. Do not use
-it with production or sensitive infrastructure.
+Alpha releases are experimental and have no production support commitment. Do
+not use them with production or sensitive infrastructure without reviewing the
+exact image revision, private configuration, credential projection, RBAC, and
+network policy.
 
 ## Security boundary
 

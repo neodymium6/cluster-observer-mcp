@@ -35,20 +35,81 @@ func TestLoad(t *testing.T) {
   ]
 }`)
 
-	clients, err := Load(configPath)
+	sources, err := Load(configPath)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if len(clients) != 1 {
-		t.Fatalf("Load() client count = %d, want 1", len(clients))
+	if len(sources.Kubernetes) != 1 {
+		t.Fatalf("Load() Kubernetes client count = %d, want 1", len(sources.Kubernetes))
 	}
-	target := clients[0].Target()
+	target := sources.Kubernetes[0].Target()
 	if target.ID != "cluster-a" || target.Kind != observer.TargetKindKubernetes {
 		t.Fatalf("Load() public target = %#v", target)
 	}
 	encoded := strings.Join([]string{target.ID, string(target.Kind)}, " ")
 	if strings.Contains(encoded, "example.invalid") || strings.Contains(encoded, "fake-value") {
 		t.Fatalf("public target disclosed private configuration: %q", encoded)
+	}
+}
+
+func TestLoadMonitoringAndFluxTargets(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	writeTestFile(t, configPath, `{
+  "targets": [
+    {
+      "id": "monitoring-a",
+      "kind": "monitoring",
+      "endpoint": "https://kubernetes.example.invalid",
+      "prometheus": {
+        "namespace": "fixture-monitoring",
+        "name": "fixture-metrics",
+        "port": "http"
+      },
+      "alertmanager": {
+        "namespace": "fixture-monitoring",
+        "name": "fixture-alerts",
+        "port": "http"
+      },
+      "scrapes": [
+        {"id": "api", "job": "fixture-private-job", "instance": "fixture-a:9090"}
+      ],
+      "alertComponents": [
+        {"alertName": "FixtureDegraded", "component": "platform"}
+      ]
+    },
+    {
+      "id": "flux-a",
+      "kind": "flux",
+      "endpoint": "https://kubernetes.example.invalid",
+      "scopes": [
+        {"id": "system", "namespace": "fixture-system"}
+      ]
+    }
+  ]
+}`)
+
+	sources, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(sources.Monitoring) != 1 || len(sources.Flux) != 1 ||
+		len(sources.Kubernetes) != 0 {
+		t.Fatalf("Load() source counts = Kubernetes %d, monitoring %d, Flux %d",
+			len(sources.Kubernetes), len(sources.Monitoring), len(sources.Flux))
+	}
+	publicTargets := []observer.Target{sources.Monitoring[0].Target(), sources.Flux[0].Target()}
+	encoded := ""
+	for _, target := range publicTargets {
+		encoded += target.ID + string(target.Kind)
+	}
+	for _, private := range []string{
+		"example.invalid", "fixture-monitoring", "fixture-private-job", "fixture-system",
+	} {
+		if strings.Contains(encoded, private) {
+			t.Fatalf("public targets disclosed private configuration %q", private)
+		}
 	}
 }
 
@@ -70,6 +131,23 @@ func TestLoadFailsClosed(t *testing.T) {
   }]
 }`},
 		{name: "oversized", content: strings.Repeat(" ", maxConfigBytes+1)},
+		{name: "monitoring fields on Kubernetes", content: `{
+  "targets": [{
+    "id": "cluster-a",
+    "kind": "kubernetes",
+    "endpoint": "https://kubernetes.example.invalid",
+    "scopes": [{"id": "system", "namespace": "fixture-system"}],
+    "prometheus": {"namespace": "fixture-system", "name": "metrics", "port": "http"}
+  }]
+}`},
+		{name: "monitoring missing services", content: `{
+  "targets": [{
+    "id": "monitoring-a",
+    "kind": "monitoring",
+    "endpoint": "https://kubernetes.example.invalid",
+    "scrapes": [{"id": "api", "job": "fixture-job"}]
+  }]
+}`},
 	}
 
 	for _, tt := range tests {

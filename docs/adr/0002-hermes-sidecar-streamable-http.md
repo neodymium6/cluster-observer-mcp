@@ -68,7 +68,7 @@ outside the Pod requires a new decision covering authentication, authorization,
 TLS, and network policy.
 
 Hermes will configure the observer with a URL and an explicit include-list of
-the three observer tools. It will use `127.0.0.1`, not `localhost`, so name
+the enabled observer tools. It will use `127.0.0.1`, not `localhost`, so name
 resolution cannot select an address on which the server is not listening.
 
 ## Credential isolation

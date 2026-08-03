@@ -74,6 +74,10 @@ func New(config Config) (*Client, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{}
 	}
+	copiedHTTPClient := *httpClient
+	copiedHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	requestTimeout := config.RequestTimeout
 	if requestTimeout == 0 {
 		requestTimeout = defaultRequestTimeout
@@ -85,7 +89,7 @@ func New(config Config) (*Client, error) {
 	return &Client{
 		baseURL:        baseURL,
 		credential:     config.Credential,
-		httpClient:     httpClient,
+		httpClient:     &copiedHTTPClient,
 		requestTimeout: requestTimeout,
 		requestSlots:   make(chan struct{}, maxConcurrentRequests),
 	}, nil

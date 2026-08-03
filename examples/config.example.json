@@ -13,6 +13,51 @@
           "namespace": "fixture-system"
         }
       ]
+    },
+    {
+      "id": "monitoring-a",
+      "kind": "monitoring",
+      "endpoint": "https://kubernetes.example.invalid",
+      "bearerTokenFile": "/run/secrets/cluster-observer/source-token",
+      "caBundleFile": "/run/secrets/cluster-observer/source-ca.pem",
+      "requestTimeout": "5s",
+      "prometheus": {
+        "namespace": "fixture-monitoring",
+        "name": "fixture-prometheus",
+        "port": "http"
+      },
+      "alertmanager": {
+        "namespace": "fixture-monitoring",
+        "name": "fixture-alertmanager",
+        "port": "http"
+      },
+      "scrapes": [
+        {
+          "id": "platform-metrics",
+          "job": "fixture-platform",
+          "instance": "fixture-metrics:9090"
+        }
+      ],
+      "alertComponents": [
+        {
+          "alertName": "FixtureStorageDegraded",
+          "component": "storage"
+        }
+      ]
+    },
+    {
+      "id": "flux-a",
+      "kind": "flux",
+      "endpoint": "https://kubernetes.example.invalid",
+      "bearerTokenFile": "/run/secrets/cluster-observer/source-token",
+      "caBundleFile": "/run/secrets/cluster-observer/source-ca.pem",
+      "requestTimeout": "5s",
+      "scopes": [
+        {
+          "id": "system",
+          "namespace": "fixture-system"
+        }
+      ]
     }
   ]
 }

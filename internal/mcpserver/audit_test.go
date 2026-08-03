@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/neodymium6/cluster-observer-mcp/internal/flux"
 	"github.com/neodymium6/cluster-observer-mcp/internal/kubernetes"
 	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
+	"github.com/neodymium6/cluster-observer-mcp/internal/sourcehttp"
 )
 
 func TestAuditSuccessEventsContainOnlyBoundedSummaries(t *testing.T) {
@@ -19,7 +21,11 @@ func TestAuditSuccessEventsContainOnlyBoundedSummaries(t *testing.T) {
 
 	var output bytes.Buffer
 	source := &auditSource{}
-	server, err := NewWithOptions("test", []KubernetesSource{source}, Options{
+	server, err := NewWithSourceSet("test", SourceSet{
+		Kubernetes: []KubernetesSource{source},
+		Monitoring: []MonitoringSource{&auditMonitoringSource{}},
+		Flux:       []FluxSource{&auditFluxSource{}},
+	}, Options{
 		AuditWriter: &output,
 		Now: func() time.Time {
 			return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
@@ -38,10 +44,20 @@ func TestAuditSuccessEventsContainOnlyBoundedSummaries(t *testing.T) {
 		"target": "cluster-a",
 		"scope":  "system",
 	})
+	callAuditTool(t, session, ToolListActiveAlerts, map[string]any{
+		"target": "monitoring-a",
+	})
+	callAuditTool(t, session, ToolGetScrapeHealth, map[string]any{
+		"target": "monitoring-a",
+	})
+	callAuditTool(t, session, ToolListUnhealthyReconciliations, map[string]any{
+		"target": "flux-a",
+		"scope":  "system",
+	})
 
 	events := decodeAuditEvents(t, output.Bytes())
-	if len(events) != 3 {
-		t.Fatalf("audit event count = %d, want 3", len(events))
+	if len(events) != 6 {
+		t.Fatalf("audit event count = %d, want 6", len(events))
 	}
 	for _, event := range events {
 		if event.Timestamp != "2026-08-03T12:00:00Z" ||
@@ -51,7 +67,7 @@ func TestAuditSuccessEventsContainOnlyBoundedSummaries(t *testing.T) {
 		}
 	}
 	if events[0].Tool != ToolListTargets || events[0].ItemCount == nil ||
-		*events[0].ItemCount != 1 {
+		*events[0].ItemCount != 3 {
 		t.Fatalf("target audit event = %#v", events[0])
 	}
 	if events[1].Tool != ToolGetClusterHealth || events[1].Target != "cluster-a" ||
@@ -63,6 +79,24 @@ func TestAuditSuccessEventsContainOnlyBoundedSummaries(t *testing.T) {
 		events[2].ItemCount == nil || *events[2].ItemCount != 2 ||
 		events[2].Truncated == nil || !*events[2].Truncated {
 		t.Fatalf("workload audit event = %#v", events[2])
+	}
+	if events[3].Tool != ToolListActiveAlerts ||
+		events[3].Target != "monitoring-a" || events[3].ItemCount == nil ||
+		*events[3].ItemCount != 1 || events[3].Truncated == nil ||
+		!*events[3].Truncated {
+		t.Fatalf("alert audit event = %#v", events[3])
+	}
+	if events[4].Tool != ToolGetScrapeHealth ||
+		events[4].Target != "monitoring-a" || events[4].ItemCount == nil ||
+		*events[4].ItemCount != 2 || events[4].Partial == nil ||
+		!*events[4].Partial {
+		t.Fatalf("scrape audit event = %#v", events[4])
+	}
+	if events[5].Tool != ToolListUnhealthyReconciliations ||
+		events[5].Target != "flux-a" || events[5].Scope != "system" ||
+		events[5].ItemCount == nil || *events[5].ItemCount != 1 ||
+		events[5].Truncated == nil || !*events[5].Truncated {
+		t.Fatalf("Flux audit event = %#v", events[5])
 	}
 }
 
@@ -183,6 +217,12 @@ func TestAuditOutcomeCategoriesAreBounded(t *testing.T) {
 		{kubernetes.ErrSourceRejected, auditSourceRejected},
 		{kubernetes.ErrCredentialUnavailable, auditCredentialUnavailable},
 		{kubernetes.ErrInvalidSourceResponse, auditInvalidSourceResponse},
+		{flux.ErrUnknownScope, auditScopeNotConfigured},
+		{sourcehttp.ErrSourceTimeout, auditSourceTimeout},
+		{sourcehttp.ErrSourceUnavailable, auditSourceUnavailable},
+		{sourcehttp.ErrSourceRejected, auditSourceRejected},
+		{sourcehttp.ErrCredentialUnavailable, auditCredentialUnavailable},
+		{sourcehttp.ErrInvalidSourceResponse, auditInvalidSourceResponse},
 		{observer.ErrResultTooLarge, auditResultTooLarge},
 		{errObservationCanceled, auditCanceled},
 		{errObservationFailed, auditInternalError},
@@ -198,6 +238,66 @@ func TestAuditOutcomeCategoriesAreBounded(t *testing.T) {
 
 type auditSource struct {
 	healthErr error
+}
+
+type auditMonitoringSource struct{}
+
+func (*auditMonitoringSource) Target() observer.Target {
+	return (&fakeMonitoringSource{}).Target()
+}
+
+func (*auditMonitoringSource) ListActiveAlerts(
+	context.Context,
+	observer.ListActiveAlertsInput,
+) (observer.ListActiveAlertsOutput, error) {
+	return observer.ListActiveAlertsOutput{
+		Target:     "monitoring-a",
+		ObservedAt: time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Alerts: []observer.ActiveAlert{{
+			Name:     "FixtureDegraded",
+			Severity: observer.AlertSeverityWarning,
+		}},
+		Truncated: true,
+	}, nil
+}
+
+func (*auditMonitoringSource) GetScrapeHealth(
+	context.Context,
+	observer.GetScrapeHealthInput,
+) (observer.GetScrapeHealthOutput, error) {
+	return observer.GetScrapeHealthOutput{
+		Target:     "monitoring-a",
+		ObservedAt: time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Scrapes: []observer.ScrapeHealth{
+			{ID: "api", State: observer.ScrapeStateUp},
+			{ID: "node", State: observer.ScrapeStateDown},
+		},
+		Partial: true,
+	}, nil
+}
+
+type auditFluxSource struct{}
+
+func (*auditFluxSource) Target() observer.Target {
+	return (&fakeFluxSource{}).Target()
+}
+
+func (*auditFluxSource) ListUnhealthyReconciliations(
+	context.Context,
+	observer.ListUnhealthyReconciliationsInput,
+) (observer.ListUnhealthyReconciliationsOutput, error) {
+	return observer.ListUnhealthyReconciliationsOutput{
+		Target:     "flux-a",
+		ObservedAt: time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Reconciliations: []observer.UnhealthyReconciliation{{
+			Scope:  "system",
+			Kind:   observer.ReconciliationKindKustomization,
+			Name:   "platform",
+			State:  observer.ReadinessStateFalse,
+			Reason: observer.ReconciliationReasonHealthCheckFailed,
+		}},
+		Truncated: true,
+	}, nil
 }
 
 func (*auditSource) Target() observer.Target {

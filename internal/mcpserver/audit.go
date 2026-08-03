@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/neodymium6/cluster-observer-mcp/internal/flux"
 	"github.com/neodymium6/cluster-observer-mcp/internal/kubernetes"
 	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
+	"github.com/neodymium6/cluster-observer-mcp/internal/sourcehttp"
 )
 
 const auditSchemaVersion = 1
@@ -108,7 +110,8 @@ func auditRequest(request mcp.Request) (auditEvent, bool) {
 	case ToolListTargets:
 		event.Tool = ToolListTargets
 		return event, true
-	case ToolGetClusterHealth, ToolListUnhealthyWorkloads:
+	case ToolGetClusterHealth, ToolListUnhealthyWorkloads, ToolListActiveAlerts,
+		ToolGetScrapeHealth, ToolListUnhealthyReconciliations:
 		event.Tool = params.Name
 	default:
 		return event, false
@@ -165,6 +168,8 @@ func auditOutcome(
 		return auditTargetNotConfigured
 	case errors.Is(toolErr, kubernetes.ErrUnknownScope):
 		return auditScopeNotConfigured
+	case errors.Is(toolErr, flux.ErrUnknownScope):
+		return auditScopeNotConfigured
 	case errors.Is(toolErr, kubernetes.ErrSourceTimeout):
 		return auditSourceTimeout
 	case errors.Is(toolErr, kubernetes.ErrSourceUnavailable):
@@ -174,6 +179,16 @@ func auditOutcome(
 	case errors.Is(toolErr, kubernetes.ErrCredentialUnavailable):
 		return auditCredentialUnavailable
 	case errors.Is(toolErr, kubernetes.ErrInvalidSourceResponse):
+		return auditInvalidSourceResponse
+	case errors.Is(toolErr, sourcehttp.ErrSourceTimeout):
+		return auditSourceTimeout
+	case errors.Is(toolErr, sourcehttp.ErrSourceUnavailable):
+		return auditSourceUnavailable
+	case errors.Is(toolErr, sourcehttp.ErrSourceRejected):
+		return auditSourceRejected
+	case errors.Is(toolErr, sourcehttp.ErrCredentialUnavailable):
+		return auditCredentialUnavailable
+	case errors.Is(toolErr, sourcehttp.ErrInvalidSourceResponse):
 		return auditInvalidSourceResponse
 	case errors.Is(toolErr, observer.ErrResultTooLarge):
 		return auditResultTooLarge
@@ -215,6 +230,30 @@ func addAuditResult(event *auditEvent, result mcp.Result) {
 		var output observer.ListUnhealthyWorkloadsOutput
 		if json.Unmarshal(encoded, &output) == nil {
 			count := len(output.Workloads)
+			truncated := output.Truncated
+			event.ItemCount = &count
+			event.Truncated = &truncated
+		}
+	case ToolListActiveAlerts:
+		var output observer.ListActiveAlertsOutput
+		if json.Unmarshal(encoded, &output) == nil {
+			count := len(output.Alerts)
+			truncated := output.Truncated
+			event.ItemCount = &count
+			event.Truncated = &truncated
+		}
+	case ToolGetScrapeHealth:
+		var output observer.GetScrapeHealthOutput
+		if json.Unmarshal(encoded, &output) == nil {
+			count := len(output.Scrapes)
+			partial := output.Partial
+			event.ItemCount = &count
+			event.Partial = &partial
+		}
+	case ToolListUnhealthyReconciliations:
+		var output observer.ListUnhealthyReconciliationsOutput
+		if json.Unmarshal(encoded, &output) == nil {
+			count := len(output.Reconciliations)
 			truncated := output.Truncated
 			event.ItemCount = &count
 			event.Truncated = &truncated

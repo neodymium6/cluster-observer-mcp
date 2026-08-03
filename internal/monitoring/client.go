@@ -15,6 +15,7 @@ import (
 var dnsLabelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 var portNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,13}[a-z0-9])?$`)
 var alertNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_:.-]{0,127}$`)
+var controlCharacterPattern = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 
 // Service identifies one private Kubernetes Service proxy destination.
 type Service struct {
@@ -163,7 +164,7 @@ func serviceProxyPath(service Service) string {
 }
 
 func validLabelValue(value string) bool {
-	return value != "" && len(value) <= 256 && !regexp.MustCompile(`[\x00-\x1f\x7f]`).MatchString(value)
+	return value != "" && len(value) <= 256 && !controlCharacterPattern.MatchString(value)
 }
 
 func seriesKey(job, instance string) string {

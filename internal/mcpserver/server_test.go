@@ -18,7 +18,13 @@ func TestToolsExposeBoundedSchemasAndStructuredContent(t *testing.T) {
 	t.Parallel()
 
 	source := &fakeSource{}
-	server, err := New("test", []KubernetesSource{source})
+	monitoringSource := &fakeMonitoringSource{}
+	fluxSource := &fakeFluxSource{}
+	server, err := NewWithSourceSet("test", SourceSet{
+		Kubernetes: []KubernetesSource{source},
+		Monitoring: []MonitoringSource{monitoringSource},
+		Flux:       []FluxSource{fluxSource},
+	}, Options{})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -28,8 +34,8 @@ func TestToolsExposeBoundedSchemasAndStructuredContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools() error = %v", err)
 	}
-	if len(listed.Tools) != 3 {
-		t.Fatalf("ListTools() count = %d, want 3", len(listed.Tools))
+	if len(listed.Tools) != 6 {
+		t.Fatalf("ListTools() count = %d, want 6", len(listed.Tools))
 	}
 	for _, tool := range listed.Tools {
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint ||
@@ -62,7 +68,8 @@ func TestToolsExposeBoundedSchemasAndStructuredContent(t *testing.T) {
 	}
 	var output observer.ListTargetsOutput
 	decodeStructuredContent(t, result.StructuredContent, &output)
-	if len(output.Targets) != 1 || output.Targets[0].ID != "cluster-a" {
+	if len(output.Targets) != 3 || output.Targets[0].ID != "cluster-a" ||
+		output.Targets[1].ID != "flux-a" || output.Targets[2].ID != "monitoring-a" {
 		t.Fatalf("CallTool() structured output = %#v", output)
 	}
 
@@ -90,6 +97,47 @@ func TestToolsExposeBoundedSchemasAndStructuredContent(t *testing.T) {
 	decodeStructuredContent(t, workloadResult.StructuredContent, &workloads)
 	if workloads.Target != "cluster-a" || source.lastWorkloadInput.Limit != observer.DefaultListLimit {
 		t.Fatalf("workload output = %#v, input = %#v", workloads, source.lastWorkloadInput)
+	}
+
+	alertResult, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      ToolListActiveAlerts,
+		Arguments: map[string]any{"target": "monitoring-a"},
+	})
+	if err != nil || alertResult.IsError {
+		t.Fatalf("active alert result = %#v, error = %v", alertResult, err)
+	}
+	var alerts observer.ListActiveAlertsOutput
+	decodeStructuredContent(t, alertResult.StructuredContent, &alerts)
+	if alerts.Target != "monitoring-a" ||
+		monitoringSource.lastAlertInput.Limit != observer.DefaultListLimit {
+		t.Fatalf("active alert output = %#v, input = %#v", alerts, monitoringSource.lastAlertInput)
+	}
+
+	scrapeResult, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      ToolGetScrapeHealth,
+		Arguments: map[string]any{"target": "monitoring-a"},
+	})
+	if err != nil || scrapeResult.IsError {
+		t.Fatalf("scrape result = %#v, error = %v", scrapeResult, err)
+	}
+	var scrapes observer.GetScrapeHealthOutput
+	decodeStructuredContent(t, scrapeResult.StructuredContent, &scrapes)
+	if scrapes.Target != "monitoring-a" {
+		t.Fatalf("scrape output = %#v", scrapes)
+	}
+
+	fluxResult, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      ToolListUnhealthyReconciliations,
+		Arguments: map[string]any{"target": "flux-a"},
+	})
+	if err != nil || fluxResult.IsError {
+		t.Fatalf("Flux result = %#v, error = %v", fluxResult, err)
+	}
+	var reconciliations observer.ListUnhealthyReconciliationsOutput
+	decodeStructuredContent(t, fluxResult.StructuredContent, &reconciliations)
+	if reconciliations.Target != "flux-a" ||
+		fluxSource.lastInput.Limit != observer.DefaultListLimit {
+		t.Fatalf("Flux output = %#v, input = %#v", reconciliations, fluxSource.lastInput)
 	}
 }
 
@@ -122,6 +170,16 @@ func TestToolInputsFailClosedBeforeSourceCalls(t *testing.T) {
 			name:      "excessive limit",
 			tool:      ToolListUnhealthyWorkloads,
 			arguments: map[string]any{"target": "cluster-a", "limit": 51},
+		},
+		{
+			name:      "monitoring PromQL",
+			tool:      ToolGetScrapeHealth,
+			arguments: map[string]any{"target": "monitoring-a", "query": "up"},
+		},
+		{
+			name:      "Flux API path",
+			tool:      ToolListUnhealthyReconciliations,
+			arguments: map[string]any{"target": "flux-a", "path": "/api/v1/secrets"},
 		},
 	}
 
@@ -171,6 +229,31 @@ func TestToolErrorsRedactUnexpectedSourceDetails(t *testing.T) {
 	}
 }
 
+func TestTargetCapabilitiesFailClosed(t *testing.T) {
+	t.Parallel()
+
+	source := &fakeMonitoringSource{
+		capabilities: []observer.Capability{observer.CapabilityMonitoringActiveAlerts},
+	}
+	server, err := NewWithSourceSet("test", SourceSet{
+		Monitoring: []MonitoringSource{source},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("NewWithSourceSet() error = %v", err)
+	}
+	session := connectTestClient(t, server)
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      ToolGetScrapeHealth,
+		Arguments: map[string]any{"target": "monitoring-a"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() protocol error = %v", err)
+	}
+	if !result.IsError || source.scrapeCalls != 0 {
+		t.Fatalf("CallTool() result = %#v, scrape calls = %d", result, source.scrapeCalls)
+	}
+}
+
 func TestStdioTransport(t *testing.T) {
 	if os.Getenv("CLUSTER_OBSERVER_STDIO_HELPER") == "1" {
 		server, err := New("test", nil)
@@ -211,6 +294,75 @@ type fakeSource struct {
 	workloadCalls     int
 	healthErr         error
 	lastWorkloadInput observer.ListUnhealthyWorkloadsInput
+}
+
+type fakeMonitoringSource struct {
+	lastAlertInput observer.ListActiveAlertsInput
+	capabilities   []observer.Capability
+	scrapeCalls    int
+}
+
+func (s *fakeMonitoringSource) Target() observer.Target {
+	capabilities := s.capabilities
+	if capabilities == nil {
+		capabilities = []observer.Capability{
+			observer.CapabilityMonitoringActiveAlerts,
+			observer.CapabilityMonitoringScrapeHealth,
+		}
+	}
+	return observer.Target{
+		ID:           "monitoring-a",
+		Kind:         observer.TargetKindMonitoring,
+		Capabilities: capabilities,
+	}
+}
+
+func (s *fakeMonitoringSource) ListActiveAlerts(
+	_ context.Context,
+	input observer.ListActiveAlertsInput,
+) (observer.ListActiveAlertsOutput, error) {
+	s.lastAlertInput = input
+	return observer.ListActiveAlertsOutput{
+		Target:     "monitoring-a",
+		ObservedAt: time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Alerts:     []observer.ActiveAlert{},
+	}, nil
+}
+
+func (s *fakeMonitoringSource) GetScrapeHealth(
+	context.Context,
+	observer.GetScrapeHealthInput,
+) (observer.GetScrapeHealthOutput, error) {
+	s.scrapeCalls++
+	return observer.GetScrapeHealthOutput{
+		Target:     "monitoring-a",
+		ObservedAt: time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Scrapes:    []observer.ScrapeHealth{},
+	}, nil
+}
+
+type fakeFluxSource struct {
+	lastInput observer.ListUnhealthyReconciliationsInput
+}
+
+func (*fakeFluxSource) Target() observer.Target {
+	return observer.Target{
+		ID:           "flux-a",
+		Kind:         observer.TargetKindFlux,
+		Capabilities: []observer.Capability{observer.CapabilityFluxUnhealthyReconciliations},
+	}
+}
+
+func (s *fakeFluxSource) ListUnhealthyReconciliations(
+	_ context.Context,
+	input observer.ListUnhealthyReconciliationsInput,
+) (observer.ListUnhealthyReconciliationsOutput, error) {
+	s.lastInput = input
+	return observer.ListUnhealthyReconciliationsOutput{
+		Target:          "flux-a",
+		ObservedAt:      time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC),
+		Reconciliations: []observer.UnhealthyReconciliation{},
+	}, nil
 }
 
 func (*fakeSource) Target() observer.Target {

@@ -15,8 +15,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neodymium6/cluster-observer-mcp/internal/flux"
 	"github.com/neodymium6/cluster-observer-mcp/internal/kubernetes"
+	"github.com/neodymium6/cluster-observer-mcp/internal/monitoring"
 	"github.com/neodymium6/cluster-observer-mcp/internal/observer"
+	"github.com/neodymium6/cluster-observer-mcp/internal/sourcehttp"
 )
 
 const (
@@ -32,13 +35,17 @@ type File struct {
 
 // Target configures one purpose-built observation source.
 type Target struct {
-	ID              string  `json:"id"`
-	Kind            string  `json:"kind"`
-	Endpoint        string  `json:"endpoint"`
-	BearerTokenFile string  `json:"bearerTokenFile,omitempty"`
-	CABundleFile    string  `json:"caBundleFile,omitempty"`
-	RequestTimeout  string  `json:"requestTimeout,omitempty"`
-	Scopes          []Scope `json:"scopes"`
+	ID              string           `json:"id"`
+	Kind            string           `json:"kind"`
+	Endpoint        string           `json:"endpoint"`
+	BearerTokenFile string           `json:"bearerTokenFile,omitempty"`
+	CABundleFile    string           `json:"caBundleFile,omitempty"`
+	RequestTimeout  string           `json:"requestTimeout,omitempty"`
+	Scopes          []Scope          `json:"scopes,omitempty"`
+	Prometheus      *Service         `json:"prometheus,omitempty"`
+	Alertmanager    *Service         `json:"alertmanager,omitempty"`
+	Scrapes         []Scrape         `json:"scrapes,omitempty"`
+	AlertComponents []AlertComponent `json:"alertComponents,omitempty"`
 }
 
 // Scope maps a public scope identifier to a private Kubernetes namespace.
@@ -47,35 +54,79 @@ type Scope struct {
 	Namespace string `json:"namespace"`
 }
 
+// Service configures one fixed Kubernetes Service proxy destination.
+type Service struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Port      string `json:"port"`
+}
+
+// Scrape maps exact private Prometheus label values to an opaque public ID.
+type Scrape struct {
+	ID       string `json:"id"`
+	Job      string `json:"job"`
+	Instance string `json:"instance,omitempty"`
+}
+
+// AlertComponent maps an exact alert name to an opaque component ID.
+type AlertComponent struct {
+	AlertName string `json:"alertName"`
+	Component string `json:"component"`
+}
+
+// Sources contains every configured purpose-built source family.
+type Sources struct {
+	Kubernetes []*kubernetes.Client
+	Monitoring []*monitoring.Client
+	Flux       []*flux.Client
+}
+
 // Load opens and strictly decodes a bounded configuration file.
-func Load(path string) ([]*kubernetes.Client, error) {
+func Load(path string) (Sources, error) {
 	body, err := readBoundedFile(path, maxConfigBytes)
 	if err != nil {
-		return nil, errors.New("open runtime configuration failed")
+		return Sources{}, errors.New("open runtime configuration failed")
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var config File
 	if err := decoder.Decode(&config); err != nil {
-		return nil, errors.New("decode runtime configuration failed")
+		return Sources{}, errors.New("decode runtime configuration failed")
 	}
 	if err := ensureJSONEnd(decoder); err != nil {
-		return nil, err
+		return Sources{}, err
 	}
 	if len(config.Targets) > observer.MaxTargets {
-		return nil, errors.New("runtime configuration has too many targets")
+		return Sources{}, errors.New("runtime configuration has too many targets")
 	}
 
-	clients := make([]*kubernetes.Client, 0, len(config.Targets))
+	sources := Sources{}
 	for _, target := range config.Targets {
-		client, err := buildTarget(target)
-		if err != nil {
-			return nil, err
+		switch target.Kind {
+		case string(observer.TargetKindKubernetes):
+			client, err := buildKubernetesTarget(target)
+			if err != nil {
+				return Sources{}, err
+			}
+			sources.Kubernetes = append(sources.Kubernetes, client)
+		case string(observer.TargetKindMonitoring):
+			client, err := buildMonitoringTarget(target)
+			if err != nil {
+				return Sources{}, err
+			}
+			sources.Monitoring = append(sources.Monitoring, client)
+		case string(observer.TargetKindFlux):
+			client, err := buildFluxTarget(target)
+			if err != nil {
+				return Sources{}, err
+			}
+			sources.Flux = append(sources.Flux, client)
+		default:
+			return Sources{}, errors.New("runtime configuration contains an unsupported target kind")
 		}
-		clients = append(clients, client)
 	}
-	return clients, nil
+	return sources, nil
 }
 
 func ensureJSONEnd(decoder *json.Decoder) error {
@@ -86,26 +137,14 @@ func ensureJSONEnd(decoder *json.Decoder) error {
 	return nil
 }
 
-func buildTarget(target Target) (*kubernetes.Client, error) {
-	if target.Kind != string(observer.TargetKindKubernetes) {
-		return nil, errors.New("runtime configuration contains an unsupported target kind")
+func buildKubernetesTarget(target Target) (*kubernetes.Client, error) {
+	if target.Prometheus != nil || target.Alertmanager != nil || len(target.Scrapes) != 0 ||
+		len(target.AlertComponents) != 0 {
+		return nil, errors.New("runtime target configuration is invalid")
 	}
-
-	credential, err := fileCredentialSource(target.BearerTokenFile)
+	credential, httpClient, timeout, err := buildSharedTarget(target)
 	if err != nil {
 		return nil, err
-	}
-	httpClient, err := secureHTTPClient(target.CABundleFile)
-	if err != nil {
-		return nil, err
-	}
-
-	timeout := time.Duration(0)
-	if target.RequestTimeout != "" {
-		timeout, err = time.ParseDuration(target.RequestTimeout)
-		if err != nil {
-			return nil, errors.New("runtime configuration contains an invalid request timeout")
-		}
 	}
 
 	scopes := make([]kubernetes.Scope, 0, len(target.Scopes))
@@ -130,7 +169,100 @@ func buildTarget(target Target) (*kubernetes.Client, error) {
 	return client, nil
 }
 
-func fileCredentialSource(path string) (kubernetes.CredentialSource, error) {
+func buildMonitoringTarget(target Target) (*monitoring.Client, error) {
+	if len(target.Scopes) != 0 || target.Prometheus == nil || target.Alertmanager == nil {
+		return nil, errors.New("runtime target configuration is invalid")
+	}
+	credential, httpClient, timeout, err := buildSharedTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	scrapes := make([]monitoring.ScrapeIdentity, 0, len(target.Scrapes))
+	for _, scrape := range target.Scrapes {
+		scrapes = append(scrapes, monitoring.ScrapeIdentity{
+			ID: scrape.ID, Job: scrape.Job, Instance: scrape.Instance,
+		})
+	}
+	components := make([]monitoring.AlertComponent, 0, len(target.AlertComponents))
+	for _, component := range target.AlertComponents {
+		components = append(components, monitoring.AlertComponent{
+			AlertName: component.AlertName, Component: component.Component,
+		})
+	}
+	client, err := monitoring.NewClient(monitoring.Config{
+		TargetID:       target.ID,
+		BaseURL:        target.Endpoint,
+		Credential:     credential,
+		HTTPClient:     httpClient,
+		RequestTimeout: timeout,
+		Prometheus: monitoring.Service{
+			Namespace: target.Prometheus.Namespace,
+			Name:      target.Prometheus.Name,
+			Port:      target.Prometheus.Port,
+		},
+		Alertmanager: monitoring.Service{
+			Namespace: target.Alertmanager.Namespace,
+			Name:      target.Alertmanager.Name,
+			Port:      target.Alertmanager.Port,
+		},
+		Scrapes:    scrapes,
+		Components: components,
+	})
+	if err != nil {
+		return nil, errors.New("runtime target configuration is invalid")
+	}
+	return client, nil
+}
+
+func buildFluxTarget(target Target) (*flux.Client, error) {
+	if target.Prometheus != nil || target.Alertmanager != nil || len(target.Scrapes) != 0 ||
+		len(target.AlertComponents) != 0 {
+		return nil, errors.New("runtime target configuration is invalid")
+	}
+	credential, httpClient, timeout, err := buildSharedTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	scopes := make([]flux.Scope, 0, len(target.Scopes))
+	for _, scope := range target.Scopes {
+		scopes = append(scopes, flux.Scope{ID: scope.ID, Namespace: scope.Namespace})
+	}
+	client, err := flux.NewClient(flux.Config{
+		TargetID:       target.ID,
+		BaseURL:        target.Endpoint,
+		Credential:     credential,
+		Scopes:         scopes,
+		HTTPClient:     httpClient,
+		RequestTimeout: timeout,
+	})
+	if err != nil {
+		return nil, errors.New("runtime target configuration is invalid")
+	}
+	return client, nil
+}
+
+func buildSharedTarget(
+	target Target,
+) (sourcehttp.CredentialSource, *http.Client, time.Duration, error) {
+	credential, err := fileCredentialSource(target.BearerTokenFile)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	httpClient, err := secureHTTPClient(target.CABundleFile)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	timeout := time.Duration(0)
+	if target.RequestTimeout != "" {
+		timeout, err = time.ParseDuration(target.RequestTimeout)
+		if err != nil {
+			return nil, nil, 0, errors.New("runtime configuration contains an invalid request timeout")
+		}
+	}
+	return credential, httpClient, timeout, nil
+}
+
+func fileCredentialSource(path string) (sourcehttp.CredentialSource, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -139,7 +271,7 @@ func fileCredentialSource(path string) (kubernetes.CredentialSource, error) {
 	if _, err := readCredential(path); err != nil {
 		return nil, err
 	}
-	return kubernetes.CredentialSourceFunc(func(context.Context) (string, error) {
+	return sourcehttp.CredentialSourceFunc(func(context.Context) (string, error) {
 		return readCredential(path)
 	}), nil
 }

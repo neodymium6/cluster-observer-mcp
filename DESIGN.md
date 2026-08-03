@@ -1,6 +1,6 @@
 # Design
 
-Status: initial observer and sidecar runtime hardening implemented.
+Status: bounded Kubernetes, monitoring, and Flux observations implemented.
 
 ## Objective
 
@@ -65,16 +65,13 @@ organization, cluster, network, or account identity.
 5. Publish a container image and generic deployment example.
 6. Integrate a pinned release from a separate private infrastructure overlay.
 
-The initial stdio server, fake Kubernetes adapter, loopback-only Streamable
-HTTP transport, health checks, rotation-aware credentials, and structured
-audit events defined by
+The stdio server, fake Kubernetes, monitoring, and Flux adapters, loopback-only
+Streamable HTTP transport, health checks, rotation-aware credentials, and
+structured audit events defined by
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) are complete. The
-minimal non-root OCI image is also available; a generic deployment example and
-release process are the next delivery stages.
-
-## Open decisions
-
-- Release signing and software bill of materials generation.
+minimal non-root OCI image and alpha release process are also available. A
+private operator overlay and exact RBAC validation remain deployment work, not
+public-core implementation stages.
 
 The accepted initial implementation decisions and tool boundaries are recorded
 in [ADR 0001](docs/adr/0001-initial-implementation.md).

@@ -5,17 +5,17 @@ small, explicitly designed infrastructure observations to AI assistants.
 
 ## Status
 
-The initial read-only server, deterministic fake Kubernetes adapter, and
-loopback-only Streamable HTTP sidecar transport are implemented. The first
-alpha release is intended for integration testing, not unattended production
-use. Do not deploy it or grant it infrastructure credentials without an
-explicit review of the private overlay. See
+The read-only server, deterministic fake Kubernetes, monitoring, and Flux
+adapters, and loopback-only Streamable HTTP sidecar transport are implemented.
+Alpha releases are intended for integration testing, not unattended production
+use. Do not deploy the server or grant it infrastructure credentials without
+an explicit review of the private overlay. See
 [ADR 0001](docs/adr/0001-initial-implementation.md) for the initial
 implementation choices and
 [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted
 Hermes sidecar design and
-[ADR 0003](docs/adr/0003-release-policy.md) for the release policy. The next
-bounded monitoring and Flux observations are specified in
+[ADR 0003](docs/adr/0003-release-policy.md) for the release policy. The bounded
+monitoring and Flux observations are specified in
 [ADR 0004](docs/adr/0004-bounded-monitoring-and-flux-observations.md).
 
 ## Intended boundary
@@ -87,7 +87,7 @@ cluster-observer-mcp serve-http \
 
 The listener is always `127.0.0.1`; no flag can select a wildcard, Pod IP, or
 hostname. Hermes should use `http://127.0.0.1:8080/mcp` and an explicit
-include-list containing only the three tools below. The endpoint uses same-Pod
+include-list containing only the enabled tools below. The endpoint uses same-Pod
 loopback without TLS or application authentication and must not be published
 through a Service or ingress.
 
@@ -100,20 +100,27 @@ cluster-observer-mcp probe-readiness --port 8080
 ```
 
 See [the reserved example](examples/config.example.json) for the configuration
-schema. Real endpoints, namespaces, credential files, and CA bundles belong in
-the operator's private infrastructure repository. Source credentials are read
-from a separate bounded file immediately before each source request so
-projected token rotation does not require a restart. They are never accepted
-in MCP tool input.
+schema. Real endpoints, namespaces, credential files, CA bundles, Service
+proxy coordinates, scrape label mappings, and Flux namespaces belong in the
+operator's private infrastructure repository. Source credentials are read from
+a separate bounded file immediately before each source request so projected
+token rotation does not require a restart. They are never accepted in MCP tool
+input.
 
-The initial tools are:
+The tools are:
 
 - `observer_list_targets`;
-- `kubernetes_get_cluster_health`; and
-- `kubernetes_list_unhealthy_workloads`.
+- `kubernetes_get_cluster_health`;
+- `kubernetes_list_unhealthy_workloads`;
+- `monitoring_list_active_alerts`;
+- `monitoring_get_scrape_health`; and
+- `flux_list_unhealthy_reconciliations`.
 
 All tools return structured, bounded observations. They do not expose raw
-Kubernetes objects, caller-controlled API paths, selectors, or URLs.
+Kubernetes objects, caller-controlled API paths, selectors, URLs, PromQL,
+Alertmanager filters, labels, or annotations. Monitoring requests use fixed
+Kubernetes Service proxy paths. Prometheus `job` and `instance` values are
+mapped to opaque configured scrape identities before output.
 
 Both stdio and Streamable HTTP expose the same transport-independent,
 purpose-built tool catalog. Each tool call emits a bounded JSON audit event to

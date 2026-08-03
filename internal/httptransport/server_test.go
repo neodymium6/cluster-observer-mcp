@@ -48,7 +48,10 @@ func TestStreamableHTTPExchange(t *testing.T) {
 	}
 	slices.Sort(names)
 	want := []string{
+		mcpserver.ToolListUnhealthyReconciliations,
 		mcpserver.ToolGetClusterHealth,
+		mcpserver.ToolGetScrapeHealth,
+		mcpserver.ToolListActiveAlerts,
 		mcpserver.ToolListTargets,
 		mcpserver.ToolListUnhealthyWorkloads,
 	}
