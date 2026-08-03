@@ -103,7 +103,8 @@ All tools return structured, bounded observations. They do not expose raw
 Kubernetes objects, caller-controlled API paths, selectors, or URLs.
 
 Both stdio and Streamable HTTP expose the same transport-independent,
-purpose-built tool catalog.
+purpose-built tool catalog. Each tool call emits a bounded JSON audit event to
+stderr; see [the versioned audit schema](docs/audit-events.md).
 
 The Go module is published as
 `github.com/neodymium6/cluster-observer-mcp`.

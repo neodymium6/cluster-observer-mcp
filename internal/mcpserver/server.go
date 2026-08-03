@@ -4,6 +4,8 @@ package mcpserver
 import (
 	"context"
 	"errors"
+	"io"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/neodymium6/cluster-observer-mcp/internal/kubernetes"
@@ -22,7 +24,14 @@ const (
 var (
 	errTargetNotConfigured = errors.New("target is not configured")
 	errObservationFailed   = errors.New("observation failed")
+	errObservationCanceled = errors.New("observation canceled")
 )
+
+// Options configures non-protocol server behavior.
+type Options struct {
+	AuditWriter io.Writer
+	Now         func() time.Time
+}
 
 // KubernetesSource is the narrow source surface required by the MCP tools.
 type KubernetesSource interface {
@@ -36,6 +45,16 @@ type KubernetesSource interface {
 
 // New constructs a transport-independent MCP server.
 func New(version string, sources []KubernetesSource) (*mcp.Server, error) {
+	return NewWithOptions(version, sources, Options{})
+}
+
+// NewWithOptions constructs a transport-independent MCP server with optional
+// structured audit output.
+func NewWithOptions(
+	version string,
+	sources []KubernetesSource,
+	options Options,
+) (*mcp.Server, error) {
 	targets := make([]observer.Target, 0, len(sources))
 	sourceByID := make(map[string]KubernetesSource, len(sources))
 	for _, source := range sources {
@@ -57,6 +76,9 @@ func New(version string, sources []KubernetesSource) (*mcp.Server, error) {
 		Title:   "Cluster Observer MCP",
 		Version: version,
 	}, nil)
+	if audit := newAuditLogger(options.AuditWriter, options.Now); audit != nil {
+		server.AddReceivingMiddleware(audit.middleware())
+	}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        ToolListTargets,
@@ -158,6 +180,8 @@ func safeToolError(err error) error {
 	}
 
 	switch {
+	case errors.Is(err, context.Canceled):
+		return errObservationCanceled
 	case errors.Is(err, observer.ErrResultTooLarge):
 		return observer.ErrResultTooLarge
 	case errors.Is(err, kubernetes.ErrSourceTimeout):

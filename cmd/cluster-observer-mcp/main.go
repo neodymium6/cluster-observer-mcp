@@ -129,7 +129,9 @@ func loadServer(configPath string) (*mcp.Server, error) {
 			sources = append(sources, client)
 		}
 	}
-	server, err := mcpserver.New(version, sources)
+	server, err := mcpserver.NewWithOptions(version, sources, mcpserver.Options{
+		AuditWriter: os.Stderr,
+	})
 	if err != nil {
 		return nil, errors.New("initialize server failed")
 	}

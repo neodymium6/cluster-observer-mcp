@@ -195,6 +195,9 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		if errors.Is(requestContext.Err(), context.DeadlineExceeded) {
 			return nil, ErrSourceTimeout
 		}
+		if errors.Is(requestContext.Err(), context.Canceled) {
+			return nil, context.Canceled
+		}
 		return nil, ErrSourceUnavailable
 	}
 
@@ -226,6 +229,9 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		if errors.Is(requestContext.Err(), context.DeadlineExceeded) {
 			return nil, ErrSourceTimeout
+		}
+		if errors.Is(requestContext.Err(), context.Canceled) {
+			return nil, context.Canceled
 		}
 		return nil, ErrSourceUnavailable
 	}

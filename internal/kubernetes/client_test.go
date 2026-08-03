@@ -307,6 +307,23 @@ func TestSourceConcurrencyIsBounded(t *testing.T) {
 	}
 }
 
+func TestSourceRequestPreservesCancellation(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("canceled source request must not reach the fake API")
+	}))
+	t.Cleanup(server.Close)
+	client := newFixtureClient(t, server)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := client.get(ctx, "/api/v1/nodes")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("get() error = %v, want context.Canceled", err)
+	}
+}
+
 func TestNewClientRejectsUnsafeConfiguration(t *testing.T) {
 	t.Parallel()
 
