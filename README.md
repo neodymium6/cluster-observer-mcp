@@ -8,7 +8,10 @@ small, explicitly designed infrastructure observations to AI assistants.
 The initial read-only stdio server and deterministic fake Kubernetes adapter
 are implemented. The project has no supported release. Do not deploy it or
 grant it infrastructure credentials yet. See
-[ADR 0001](docs/adr/0001-initial-implementation.md) for the accepted design.
+[ADR 0001](docs/adr/0001-initial-implementation.md) for the initial
+implementation choices and
+[ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md) for the accepted
+Hermes sidecar design.
 
 ## Intended boundary
 
@@ -72,6 +75,11 @@ The initial tools are:
 
 All tools return structured, bounded observations. They do not expose raw
 Kubernetes objects, caller-controlled API paths, selectors, or URLs.
+
+The next implementation stage will add a stateless Streamable HTTP endpoint
+bound only to `127.0.0.1` for a same-Pod Hermes sidecar integration. It is not
+implemented yet; stdio remains the only available transport in the current
+binary.
 
 The Go module is published as
 `github.com/neodymium6/cluster-observer-mcp`.

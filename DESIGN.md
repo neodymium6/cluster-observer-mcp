@@ -65,11 +65,18 @@ organization, cluster, network, or account identity.
 5. Publish a container image and generic deployment example.
 6. Integrate a pinned release from a separate private infrastructure overlay.
 
+The initial stdio server and fake Kubernetes adapter are complete. The next
+delivery stage adds the loopback-only Streamable HTTP transport, health checks,
+rotation-aware credentials, and structured audit events defined by
+[ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md).
+
 ## Open decisions
 
-- Runtime authentication between the MCP client and server.
-- Metrics, health checks, and audit-event schema.
+- Metrics and their exposure boundary.
 - Release signing and software bill of materials generation.
 
 The accepted initial implementation decisions and tool boundaries are recorded
 in [ADR 0001](docs/adr/0001-initial-implementation.md).
+
+The accepted Hermes sidecar transport and credential-isolation design is
+recorded in [ADR 0002](docs/adr/0002-hermes-sidecar-streamable-http.md).
